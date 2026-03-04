@@ -1,80 +1,172 @@
 ---
 title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+description: "Get HiveMQ CE running in 5 minutes"
 ---
 
-## Get started in three steps
+## Get Started with HiveMQ CE
 
-Get your documentation site running locally and make your first customization.
+Follow these steps to get HiveMQ Community Edition running quickly.
 
-### Step 1: Set up your local environment
-
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
+<Steps>
+  <Step title="Download or Pull Image">
+    Choose your preferred method to get HiveMQ CE:
     
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
+    <CodeGroup>
+    ```bash Docker
+    docker pull hivemq/hivemq-ce
+    ```
     
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 2: Deploy your changes
-
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
+    ```bash Binary Download
+    # Download from GitHub Releases
+    wget https://github.com/hivemq/hivemq-community-edition/releases/download/2025.5/hivemq-ce-2025.5.zip
+    unzip hivemq-ce-2025.5.zip
+    cd hivemq-ce-2025.5
+    ```
+    </CodeGroup>
     
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+    <Note>
+      Java 11 or higher is required to run the binary package.
+    </Note>
+  </Step>
+  
+  <Step title="Start HiveMQ CE">
+    Launch the broker:
+    
+    <CodeGroup>
+    ```bash Docker
+    docker run -d --name hivemq-ce -p 1883:1883 hivemq/hivemq-ce
+    ```
+    
+    ```bash Linux/macOS
+    bin/run.sh
+    ```
+    
+    ```bash Windows
+    bin\run.bat
+    ```
+    </CodeGroup>
+    
+    HiveMQ CE starts on port **1883** (MQTT) and **8000** (WebSocket) by default.
+  </Step>
+  
+  <Step title="Connect a Client">
+    Test the connection with an MQTT client:
+    
+    <Tabs>
+      <Tab title="Mosquitto CLI">
+        ```bash
+        # Subscribe to test topic
+        mosquitto_sub -h localhost -p 1883 -t "test/topic"
+        
+        # Publish a message (in another terminal)
+        mosquitto_pub -h localhost -p 1883 -t "test/topic" -m "Hello HiveMQ!"
+        ```
+      </Tab>
+      
+      <Tab title="Python">
+        ```python
+        import paho.mqtt.client as mqtt
+        
+        def on_connect(client, userdata, flags, rc):
+            print("Connected!")
+            client.subscribe("test/topic")
+        
+        def on_message(client, userdata, message):
+            print(f"Received: {message.payload.decode()}")
+        
+        client = mqtt.Client()
+        client.on_connect = on_connect
+        client.on_message = on_message
+        
+        client.connect("localhost", 1883, 60)
+        client.loop_forever()
+        ```
+      </Tab>
+      
+      <Tab title="JavaScript">
+        ```javascript
+        const mqtt = require('mqtt');
+        
+        const client = mqtt.connect('mqtt://localhost:1883');
+        
+        client.on('connect', () => {
+          console.log('Connected!');
+          client.subscribe('test/topic');
+          client.publish('test/topic', 'Hello HiveMQ!');
+        });
+        
+        client.on('message', (topic, message) => {
+          console.log(`Received: ${message.toString()}`);
+        });
+        ```
+      </Tab>
+    </Tabs>
+  </Step>
+  
+  <Step title="Verify">
+    Check that messages are flowing:
+    
+    - Subscribe to a topic in one terminal
+    - Publish to the same topic in another terminal
+    - Verify the message is received
+    
+    <Tip>
+      You can also check the HiveMQ CE logs to confirm clients are connecting successfully.
+    </Tip>
+  </Step>
+</Steps>
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+## What's Running?
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+Once started, HiveMQ CE provides:
 
-### Step 3: Go live
+- **MQTT Broker** on port 1883 (TCP)
+- **WebSocket Endpoint** on port 8000 at `/mqtt`
+- **Local file-based persistence** for QoS 1/2 messages
+- **Default configuration** allowing all clients
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
-
-## Next steps
-
-Now that you have your docs running, explore these key features:
+## Next Steps
 
 <CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
+  <Card title="Installation Guide" icon="download" href="/installation">
+    Detailed installation options for all platforms
+  </Card>
+  <Card title="Configuration" icon="sliders" href="/configuration/overview">
+    Configure listeners, security, and MQTT settings
+  </Card>
+  <Card title="MQTT Protocol" icon="network-wired" href="/mqtt/overview">
+    Learn about MQTT features and capabilities
+  </Card>
+  <Card title="Deployment" icon="rocket" href="/deployment/docker">
+    Production deployment strategies
+  </Card>
 </CardGroup>
 
-<Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
-</Note>
+## Common Issues
+
+<AccordionGroup>
+  <Accordion title="Port 1883 already in use">
+    Another MQTT broker or service is using port 1883.
+    
+    **Solution**: Stop the other service or configure HiveMQ CE to use a different port in `config.xml`.
+  </Accordion>
+  
+  <Accordion title="Java version error">
+    HiveMQ CE requires Java 11 or higher.
+    
+    **Solution**: Install JDK 11+ and verify with `java -version`.
+  </Accordion>
+  
+  <Accordion title="Permission denied">
+    The run script or binary doesn't have execute permissions.
+    
+    **Solution**: Run `chmod +x bin/run.sh` on Linux/macOS.
+  </Accordion>
+</AccordionGroup>
+
+## Resources
+
+- [Introduction](/introduction) - Learn about HiveMQ CE features
+- [MQTT Guides](/mqtt/guides/connecting-clients) - Client connection examples
+- [Extensions](/extensions/overview) - Extend HiveMQ with custom logic
+- [Community Forum](https://community.hivemq.com/) - Get help from the community

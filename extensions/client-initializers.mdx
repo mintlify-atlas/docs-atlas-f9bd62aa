@@ -1,0 +1,521 @@
+---
+title: "Client Initializers"
+description: "Initialize client context and set up client-specific behaviors when clients connect"
+---
+
+## Overview
+
+Client Initializers run when a client successfully connects to HiveMQ. They enable you to:
+
+- **Set Default Permissions** - Define initial publish and subscribe permissions
+- **Register Per-Client Interceptors** - Add client-specific packet interceptors
+- **Initialize Client Context** - Store client-specific data and state
+- **React to Connection Events** - Perform actions when clients connect
+
+## Initialization Flow
+
+1. Client completes authentication successfully
+2. HiveMQ calls `ClientInitializer.initialize()` for each registered initializer
+3. Initializer configures client context, permissions, and interceptors
+4. CONNACK is sent to client
+5. Client session is fully established
+
+See `PluginInitializerHandler.java:57` for internal client initialization handler.
+
+## Implementing a Client Initializer
+
+### Step 1: Create and Register Initializer
+
+```java
+import com.hivemq.extension.sdk.api.ExtensionMain;
+import com.hivemq.extension.sdk.api.annotations.NotNull;
+import com.hivemq.extension.sdk.api.parameter.*;
+import com.hivemq.extension.sdk.api.services.Services;
+import com.hivemq.extension.sdk.api.services.intializer.ClientInitializer;
+
+public class MyExtension implements ExtensionMain {
+    
+    @Override
+    public void extensionStart(
+            @NotNull ExtensionStartInput input,
+            @NotNull ExtensionStartOutput output) {
+        
+        Services services = input.getServices();
+        
+        // Register client initializer
+        services.initializerRegistry().setClientInitializer(
+            new MyClientInitializer()
+        );
+    }
+    
+    @Override
+    public void extensionStop(
+            @NotNull ExtensionStopInput input,
+            @NotNull ExtensionStopOutput output) {
+        // Cleanup
+    }
+}
+```
+
+See `Initializers.java:34` for initializer registration interface.
+
+### Step 2: Implement ClientInitializer
+
+```java
+import com.hivemq.extension.sdk.api.services.intializer.ClientInitializer;
+import com.hivemq.extension.sdk.api.client.ClientContext;
+import com.hivemq.extension.sdk.api.client.parameter.InitializerInput;
+import com.hivemq.extension.sdk.api.annotations.NotNull;
+
+public class MyClientInitializer implements ClientInitializer {
+    
+    @Override
+    public void initialize(
+            @NotNull InitializerInput input,
+            @NotNull ClientContext context) {
+        
+        String clientId = input.getClientInformation().getClientId();
+        
+        System.out.println("Initializing client: " + clientId);
+        
+        // Configure client context
+        // Set permissions, register interceptors, etc.
+    }
+}
+```
+
+## Setting Default Permissions
+
+Configure initial publish and subscribe permissions:
+
+```java
+import com.hivemq.extension.sdk.api.packets.auth.ModifiableDefaultPermissions;
+import com.hivemq.extension.sdk.api.packets.auth.DefaultPermission;
+import com.hivemq.extension.sdk.api.packets.general.Qos;
+
+public class PermissionsInitializer implements ClientInitializer {
+    
+    @Override
+    public void initialize(
+            @NotNull InitializerInput input,
+            @NotNull ClientContext context) {
+        
+        String clientId = input.getClientInformation().getClientId();
+        ModifiableDefaultPermissions permissions = context.getDefaultPermissions();
+        
+        // Allow publishing to own client topics
+        permissions.add(
+            permissions.createPermission(
+                "clients/" + clientId + "/#",
+                DefaultPermission.Type.PUBLISH
+            ).build()
+        );
+        
+        // Allow subscribing to own client topics
+        permissions.add(
+            permissions.createPermission(
+                "clients/" + clientId + "/#",
+                DefaultPermission.Type.SUBSCRIBE
+            ).build()
+        );
+        
+        // Allow all clients to subscribe to public topics
+        permissions.add(
+            permissions.createPermission(
+                "public/#",
+                DefaultPermission.Type.SUBSCRIBE
+            ).build()
+        );
+        
+        // Allow reading system status
+        permissions.add(
+            permissions.createPermission(
+                "system/status",
+                DefaultPermission.Type.SUBSCRIBE
+            ).build()
+        );
+    }
+}
+```
+
+### Permission Types
+
+- `DefaultPermission.Type.PUBLISH` - Allow publishing to topics
+- `DefaultPermission.Type.SUBSCRIBE` - Allow subscribing to topic filters
+- Both can be combined for read/write access
+
+### Advanced Permissions
+
+Set permissions with QoS limits:
+
+```java
+permissions.add(
+    permissions.createPermission(
+            "sensors/#",
+            DefaultPermission.Type.PUBLISH
+        )
+        .qos(Qos.EXACTLY_ONCE)  // Limit max QoS
+        .retained(true)          // Allow retained messages
+        .sharedSubscription(false) // Disallow shared subscriptions
+        .build()
+);
+```
+
+## Registering Client-Specific Interceptors
+
+Add interceptors that only apply to specific clients:
+
+```java
+import com.hivemq.extension.sdk.api.interceptor.publish.PublishInboundInterceptor;
+import com.hivemq.extension.sdk.api.interceptor.publish.parameter.PublishInboundInput;
+import com.hivemq.extension.sdk.api.interceptor.publish.parameter.PublishInboundOutput;
+
+public class ClientSpecificInitializer implements ClientInitializer {
+    
+    @Override
+    public void initialize(
+            @NotNull InitializerInput input,
+            @NotNull ClientContext context) {
+        
+        String clientId = input.getClientInformation().getClientId();
+        
+        // Add client-specific publish interceptor
+        if (clientId.startsWith("sensor-")) {
+            context.addPublishInboundInterceptor(
+                new SensorDataInterceptor(clientId)
+            );
+        }
+        
+        // Add client-specific subscribe interceptor
+        if (clientId.startsWith("admin-")) {
+            context.addSubscribeInboundInterceptor(
+                new AuditSubscriptionInterceptor(clientId)
+            );
+        }
+    }
+}
+
+class SensorDataInterceptor implements PublishInboundInterceptor {
+    
+    private final String sensorId;
+    
+    public SensorDataInterceptor(String sensorId) {
+        this.sensorId = sensorId;
+    }
+    
+    @Override
+    public void onInboundPublish(
+            @NotNull PublishInboundInput input,
+            @NotNull PublishInboundOutput output) {
+        
+        // Intercept only for this sensor
+        System.out.println("Sensor " + sensorId + " published to " + 
+            input.getPublishPacket().getTopic());
+    }
+}
+```
+
+## Accessing Client Information
+
+Get client and connection details during initialization:
+
+```java
+@Override
+public void initialize(
+        @NotNull InitializerInput input,
+        @NotNull ClientContext context) {
+    
+    // Client information
+    var clientInfo = input.getClientInformation();
+    String clientId = clientInfo.getClientId();
+    
+    // Connection information
+    var connInfo = input.getConnectionInformation();
+    String remoteAddress = connInfo.getInetAddress()
+        .map(addr -> addr.getHostAddress())
+        .orElse("unknown");
+    
+    // CONNECT packet details
+    var connectPacket = input.getConnectPacket();
+    int keepAlive = connectPacket.getKeepAlive();
+    boolean cleanStart = connectPacket.getCleanStart();
+    String username = connectPacket.getUserName().orElse("anonymous");
+    
+    System.out.println("Client " + clientId + " from " + remoteAddress + 
+        " (keepAlive=" + keepAlive + ", cleanStart=" + cleanStart + ")");
+}
+```
+
+## Role-Based Initialization
+
+Configure clients based on roles or attributes:
+
+```java
+import java.util.*;
+
+public class RoleBasedInitializer implements ClientInitializer {
+    
+    private final Map<String, Set<String>> clientRoles;
+    
+    public RoleBasedInitializer() {
+        clientRoles = new HashMap<>();
+        clientRoles.put("admin", Set.of("ADMIN", "USER"));
+        clientRoles.put("sensor-001", Set.of("SENSOR"));
+        clientRoles.put("dashboard-1", Set.of("VIEWER"));
+    }
+    
+    @Override
+    public void initialize(
+            @NotNull InitializerInput input,
+            @NotNull ClientContext context) {
+        
+        String clientId = input.getClientInformation().getClientId();
+        Set<String> roles = clientRoles.getOrDefault(clientId, Collections.emptySet());
+        
+        ModifiableDefaultPermissions permissions = context.getDefaultPermissions();
+        
+        // Apply permissions based on roles
+        if (roles.contains("ADMIN")) {
+            // Full access for admin
+            permissions.add(
+                permissions.createPermission("#", DefaultPermission.Type.PUBLISH).build()
+            );
+            permissions.add(
+                permissions.createPermission("#", DefaultPermission.Type.SUBSCRIBE).build()
+            );
+        } else if (roles.contains("SENSOR")) {
+            // Sensors can only publish to sensors/ topics
+            permissions.add(
+                permissions.createPermission(
+                    "sensors/" + clientId + "/#",
+                    DefaultPermission.Type.PUBLISH
+                ).build()
+            );
+        } else if (roles.contains("VIEWER")) {
+            // Viewers can only subscribe
+            permissions.add(
+                permissions.createPermission(
+                    "sensors/#",
+                    DefaultPermission.Type.SUBSCRIBE
+                ).build()
+            );
+            permissions.add(
+                permissions.createPermission(
+                    "public/#",
+                    DefaultPermission.Type.SUBSCRIBE
+                ).build()
+            );
+        }
+    }
+}
+```
+
+## Database-Driven Initialization
+
+Load client configuration from a database:
+
+```java
+import java.sql.*;
+
+public class DatabaseInitializer implements ClientInitializer {
+    
+    private final String jdbcUrl;
+    
+    public DatabaseInitializer(String jdbcUrl) {
+        this.jdbcUrl = jdbcUrl;
+    }
+    
+    @Override
+    public void initialize(
+            @NotNull InitializerInput input,
+            @NotNull ClientContext context) {
+        
+        String clientId = input.getClientInformation().getClientId();
+        
+        // Load permissions from database
+        List<Permission> permissions = loadPermissions(clientId);
+        
+        ModifiableDefaultPermissions defaultPermissions = context.getDefaultPermissions();
+        
+        for (Permission perm : permissions) {
+            defaultPermissions.add(
+                defaultPermissions.createPermission(
+                    perm.topic,
+                    perm.type
+                ).build()
+            );
+        }
+    }
+    
+    private List<Permission> loadPermissions(String clientId) {
+        List<Permission> permissions = new ArrayList<>();
+        String sql = "SELECT topic, type FROM client_permissions WHERE client_id = ?";
+        
+        try (Connection conn = DriverManager.getConnection(jdbcUrl);
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            
+            stmt.setString(1, clientId);
+            ResultSet rs = stmt.executeQuery();
+            
+            while (rs.next()) {
+                String topic = rs.getString("topic");
+                String typeStr = rs.getString("type");
+                DefaultPermission.Type type = "PUBLISH".equals(typeStr)
+                    ? DefaultPermission.Type.PUBLISH
+                    : DefaultPermission.Type.SUBSCRIBE;
+                
+                permissions.add(new Permission(topic, type));
+            }
+            
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        
+        return permissions;
+    }
+    
+    private static class Permission {
+        final String topic;
+        final DefaultPermission.Type type;
+        
+        Permission(String topic, DefaultPermission.Type type) {
+            this.topic = topic;
+            this.type = type;
+        }
+    }
+}
+```
+
+## Logging and Metrics
+
+Track client initialization for monitoring:
+
+```java
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+public class LoggingInitializer implements ClientInitializer {
+    
+    private static final Logger log = LoggerFactory.getLogger(LoggingInitializer.class);
+    
+    @Override
+    public void initialize(
+            @NotNull InitializerInput input,
+            @NotNull ClientContext context) {
+        
+        String clientId = input.getClientInformation().getClientId();
+        String remoteAddress = input.getConnectionInformation()
+            .getInetAddress()
+            .map(addr -> addr.getHostAddress())
+            .orElse("unknown");
+        
+        log.info("Client initialized: {} from {}", clientId, remoteAddress);
+        
+        // Set up permissions
+        ModifiableDefaultPermissions permissions = context.getDefaultPermissions();
+        
+        permissions.add(
+            permissions.createPermission(
+                "clients/" + clientId + "/#",
+                DefaultPermission.Type.PUBLISH
+            ).build()
+        );
+        
+        log.debug("Default permissions set for client: {}", clientId);
+    }
+}
+```
+
+## Best Practices
+
+### Performance
+
+1. **Keep Initialization Fast** - Don't block client connections with slow operations
+2. **Avoid Blocking I/O** - Use async operations for database lookups
+3. **Cache Configuration** - Cache role and permission mappings
+4. **Minimize Permission Count** - Use topic patterns instead of many individual permissions
+
+### Security
+
+1. **Default Deny** - Start with no permissions and add only what's needed
+2. **Validate Client IDs** - Sanitize client IDs before using in topic patterns
+3. **Audit Initialization** - Log permission grants for security auditing
+4. **Separate Concerns** - Keep authentication and authorization separate
+
+### Maintainability
+
+1. **Externalize Configuration** - Load permissions from config files or databases
+2. **Document Permissions** - Clearly document default permission model
+3. **Test Initialization** - Test initialization for different client types
+4. **Version Permissions** - Track permission changes over time
+
+## Multiple Initializers
+
+When multiple extensions register initializers:
+
+- All initializers execute in extension priority order
+- Each initializer can add to default permissions
+- Later initializers can override earlier interceptors
+- Permissions are cumulative across initializers
+
+See `Initializers.java:40` for client initializer map.
+
+## Testing Client Initialization
+
+Test initialization with MQTT clients:
+
+```bash
+# Connect and verify permissions
+mosquitto_sub -h localhost -u sensor-001 \
+  -t clients/sensor-001/status -v
+
+# Should succeed with default permissions
+mosquitto_pub -h localhost -u sensor-001 \
+  -t clients/sensor-001/data -m "test"
+
+# Should fail without permission
+mosquitto_pub -h localhost -u sensor-001 \
+  -t admin/config -m "test"
+```
+
+## Troubleshooting
+
+### Initializer Not Called
+
+- Verify initializer is registered in `extensionStart()`
+- Check that extension is loaded and started
+- Ensure client authentication succeeds
+- Review HiveMQ logs for initialization errors
+
+### Permissions Not Applied
+
+- Check permission topic patterns match client usage
+- Verify permission types (PUBLISH vs SUBSCRIBE)
+- Review authorizer configuration (may override defaults)
+- Enable debug logging for permission evaluation
+
+### Performance Issues
+
+- Avoid blocking I/O during initialization
+- Cache permission lookups
+- Minimize number of interceptors registered
+- Profile initialization time
+
+See `PluginInitializerHandler.java:98` for CONNACK initialization trigger.
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Authorization" icon="shield" href="/extensions/authorization">
+    Implement runtime authorization checks
+  </Card>
+  <Card title="Packet Interceptors" icon="filter" href="/extensions/packet-interceptors">
+    Intercept and modify MQTT packets
+  </Card>
+  <Card title="Authentication" icon="lock" href="/extensions/authentication">
+    Authenticate clients before initialization
+  </Card>
+  <Card title="Extension SDK" icon="code" href="/extensions/extension-sdk">
+    Learn more about the Extension SDK
+  </Card>
+</CardGroup>

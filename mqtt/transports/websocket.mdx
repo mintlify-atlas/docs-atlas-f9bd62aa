@@ -1,0 +1,268 @@
+---
+title: "WebSocket Transport"
+description: "Configure MQTT over WebSocket for browser and web applications"
+---
+
+## Overview
+
+MQTT over WebSocket allows web browsers and applications to connect to HiveMQ CE using the WebSocket protocol. The default port is 8000.
+
+## Configuration
+
+### Basic WebSocket Listener
+
+```xml config.xml
+<hivemq>
+  <listeners>
+    <websocket-listener>
+      <port>8000</port>
+      <bind-address>0.0.0.0</bind-address>
+      <path>/mqtt</path>
+      <name>websocket-listener</name>
+    </websocket-listener>
+  </listeners>
+</hivemq>
+```
+
+### Configuration Options
+
+| Option | Description | Default |
+|--------|-------------|--------|
+| `port` | WebSocket port | 8000 |
+| `bind-address` | Network interface | 0.0.0.0 |
+| `path` | WebSocket endpoint path | /mqtt |
+| `subprotocols` | Supported MQTT subprotocols | mqtt, mqttv3.1, mqttv3.1.1, mqttv5 |
+| `allow-extensions` | Enable WebSocket extensions | true |
+
+### Full Configuration Example
+
+```xml
+<websocket-listener>
+  <port>8000</port>
+  <bind-address>0.0.0.0</bind-address>
+  <path>/mqtt</path>
+  <name>ws-listener</name>
+  <subprotocols>
+    <subprotocol>mqtt</subprotocol>
+    <subprotocol>mqttv5</subprotocol>
+  </subprotocols>
+  <allow-extensions>true</allow-extensions>
+</websocket-listener>
+```
+
+## Browser Client Example
+
+### Using MQTT.js (Recommended)
+
+```html
+<!DOCTYPE html>
+<html>
+<head>
+  <title>MQTT WebSocket Example</title>
+  <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+</head>
+<body>
+  <h1>MQTT WebSocket Client</h1>
+  <div id="status">Disconnected</div>
+  <div id="messages"></div>
+  
+  <script>
+    // Connect to HiveMQ CE via WebSocket
+    const client = mqtt.connect('ws://localhost:8000/mqtt', {
+      clientId: 'web_' + Math.random().toString(16).substr(2, 8),
+      keepalive: 60,
+      clean: true
+    });
+    
+    client.on('connect', () => {
+      document.getElementById('status').innerHTML = 'Connected';
+      console.log('Connected to MQTT broker');
+      
+      // Subscribe to topic
+      client.subscribe('web/messages', { qos: 1 });
+      
+      // Publish message
+      client.publish('web/status', 'Browser online', { qos: 1 });
+    });
+    
+    client.on('message', (topic, message) => {
+      const msg = message.toString();
+      console.log(`Received: ${topic} = ${msg}`);
+      
+      const div = document.getElementById('messages');
+      div.innerHTML += `<p>${topic}: ${msg}</p>`;
+    });
+    
+    client.on('error', (error) => {
+      console.error('Connection error:', error);
+      document.getElementById('status').innerHTML = 'Error: ' + error;
+    });
+  </script>
+</body>
+</html>
+```
+
+### Node.js WebSocket Client
+
+```javascript
+const mqtt = require('mqtt');
+
+const client = mqtt.connect('ws://localhost:8000/mqtt', {
+  clientId: 'nodejs_websocket_client',
+  keepalive: 60,
+  clean: true,
+  reconnectPeriod: 1000
+});
+
+client.on('connect', () => {
+  console.log('Connected via WebSocket');
+  client.subscribe('test/topic', { qos: 1 });
+  client.publish('test/topic', 'Hello from WebSocket', { qos: 1 });
+});
+
+client.on('message', (topic, message) => {
+  console.log(`${topic}: ${message.toString()}`);
+});
+```
+
+## MQTT 5 over WebSocket
+
+```javascript
+const mqtt = require('mqtt');
+
+const client = mqtt.connect('ws://localhost:8000/mqtt', {
+  protocolVersion: 5,
+  clientId: 'mqtt5_websocket',
+  properties: {
+    sessionExpiryInterval: 3600,
+    receiveMaximum: 100
+  }
+});
+
+client.on('connect', (connack) => {
+  console.log('Connected with MQTT 5');
+  console.log('Server properties:', connack.properties);
+});
+```
+
+## WebSocket Subprotocols
+
+HiveMQ CE supports standard MQTT subprotocols:
+
+- `mqtt` - Generic MQTT
+- `mqttv3.1` - MQTT 3.1
+- `mqttv3.1.1` - MQTT 3.1.1
+- `mqttv5` - MQTT 5.0
+
+```javascript
+// Specify subprotocol
+const client = mqtt.connect('ws://localhost:8000/mqtt', {
+  protocolId: 'MQTT',
+  protocolVersion: 5,
+  wsOptions: {
+    protocol: 'mqttv5'
+  }
+});
+```
+
+## Docker Configuration
+
+```bash
+# Expose WebSocket port
+docker run -d --name hivemq-ce \
+  -p 1883:1883 \
+  -p 8000:8000 \
+  hivemq/hivemq-ce
+```
+
+## Firewall Configuration
+
+### Linux (iptables)
+
+```bash
+sudo iptables -A INPUT -p tcp --dport 8000 -j ACCEPT
+sudo iptables-save
+```
+
+### Linux (firewalld)
+
+```bash
+sudo firewall-cmd --permanent --add-port=8000/tcp
+sudo firewall-cmd --reload
+```
+
+## CORS Configuration
+
+<Note>
+  HiveMQ CE WebSocket listener automatically handles CORS headers for browser compatibility. No additional configuration is required.
+</Note>
+
+## Use Cases
+
+<CardGroup cols={2}>
+  <Card title="Web Dashboards" icon="chart-line">
+    Real-time data visualization in browsers
+  </Card>
+  <Card title="Progressive Web Apps" icon="mobile">
+    Push notifications and real-time updates
+  </Card>
+  <Card title="Chat Applications" icon="comments">
+    Browser-based messaging systems
+  </Card>
+  <Card title="IoT Monitoring" icon="gauge">
+    Web-based device management interfaces
+  </Card>
+</CardGroup>
+
+## Security Considerations
+
+<Warning>
+  WebSocket connections over HTTP (ws://) are **unencrypted**. Use Secure WebSocket (wss://) for production.
+</Warning>
+
+### When to Use WebSocket
+
+- ✅ Browser-based applications
+- ✅ Web dashboards
+- ✅ Progressive Web Apps (PWA)
+- ✅ Development with HTTP
+- ❌ Production without TLS
+- ❌ Public networks (use WSS instead)
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Connection refused">
+    - Verify WebSocket listener is configured and port 8000 is open
+    - Check firewall rules
+    - Ensure correct path (/mqtt)
+  </Accordion>
+  
+  <Accordion title="CORS errors in browser">
+    - HiveMQ CE handles CORS automatically
+    - Check browser console for specific errors
+    - Verify WebSocket URL is correct
+  </Accordion>
+  
+  <Accordion title="Subprotocol mismatch">
+    - Ensure client and server support same MQTT version
+    - Check configured subprotocols in config.xml
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Secure WebSocket" icon="lock" href="/mqtt/transports/secure-websocket">
+    Add TLS encryption to WebSocket
+  </Card>
+  <Card title="TCP Transport" icon="network-wired" href="/mqtt/transports/tcp">
+    Standard MQTT over TCP
+  </Card>
+  <Card title="Connecting Clients" icon="plug" href="/mqtt/guides/connecting-clients">
+    More client examples
+  </Card>
+  <Card title="Configuration" icon="sliders" href="/configuration/listeners">
+    Advanced listener configuration
+  </Card>
+</CardGroup>

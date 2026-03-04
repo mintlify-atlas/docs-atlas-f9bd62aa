@@ -1,0 +1,343 @@
+---
+title: Diagnostics
+description: Diagnostic tools and troubleshooting utilities for HiveMQ
+---
+
+# Diagnostics
+
+HiveMQ Community Edition includes diagnostic mode and troubleshooting tools to help identify and resolve issues during development and production.
+
+## Diagnostic Mode
+
+Diagnostic mode enables enhanced logging and debugging features for troubleshooting broker issues.
+
+### Starting in Diagnostic Mode
+
+#### Linux/Unix/macOS
+
+```bash
+./bin/diagnostics.sh
+```
+
+#### Windows
+
+```batch
+bin\diagnostics.bat
+```
+
+### What Diagnostic Mode Does
+
+When started in diagnostic mode, HiveMQ:
+
+1. **Enables enhanced JVM diagnostics**
+   - Heap dump on OutOfMemoryError
+   - Error log files for JVM crashes
+   - Crash on OutOfMemoryError (for immediate detection)
+
+2. **Activates diagnostic flag**
+   - Sets `-DdiagnosticMode=true` system property
+   - Can be used by extensions for conditional debug behavior
+
+3. **Displays detailed startup information**
+   - HIVEMQ_HOME directory
+   - Java options (JAVA_OPTS)
+   - Java version
+   - Configuration details
+
+### Diagnostic Script Configuration
+
+The diagnostic scripts (`diagnostics.sh` and `diagnostics.bat`) configure:
+
+**JVM Diagnostic Options:**
+```bash
+-XX:+HeapDumpOnOutOfMemoryError
+-XX:HeapDumpPath=$HIVEMQ_HEAPDUMP_FOLDER/heap-dump.hprof
+-XX:ErrorFile=$HIVEMQ_HEAPDUMP_FOLDER/hs_err_pid%p.log
+-XX:+CrashOnOutOfMemoryError
+```
+
+**System Properties:**
+- `diagnosticMode=true` - Enables diagnostic mode
+- `hivemq.home` - HiveMQ installation directory
+- `java.net.preferIPv4Stack=true` - IPv4 preference
+
+**JMX Configuration:**
+- Enabled by default (can be disabled with `HIVEMQ_JMX_ENABLED=false`)
+- Port: 9010 (configurable via `HIVEMQ_JMX_PORT`)
+- No authentication (development default)
+- Remote access enabled
+
+### Environment Variables
+
+Customize diagnostic mode behavior:
+
+```bash
+# Set custom heap dump location
+export HIVEMQ_HEAPDUMP_FOLDER=/path/to/dumps
+
+# Set HiveMQ home (auto-detected by default)
+export HIVEMQ_HOME=/opt/hivemq
+
+# Configure JMX
+export HIVEMQ_JMX_ENABLED=true
+export HIVEMQ_JMX_PORT=9010
+
+# Add custom Java options
+export JAVA_OPTS="-Xmx4g -Xms4g"
+```
+
+## Requirements
+
+### Java Version
+
+HiveMQ requires Java 11 or higher. The diagnostic scripts verify:
+
+```bash
+if [ "$JAVA_VERSION" -lt 11 ]; then
+    echo 'ERROR! HiveMQ requires at least Java version 11.'
+    exit 1
+fi
+```
+
+### Platform-Specific Requirements
+
+**Linux/Unix:**
+- Bash shell
+- Java Runtime Environment (JRE) 11+
+- Read/write permissions on HIVEMQ_HOME
+
+**Windows:**
+- Administrator rights (recommended)
+- Java Runtime Environment (JRE) 11+
+- Read/write permissions on HIVEMQ_HOME
+
+## Diagnostic Outputs
+
+### Heap Dumps
+
+When OutOfMemoryError occurs, HiveMQ generates:
+
+**File Location:**
+```
+$HIVEMQ_HEAPDUMP_FOLDER/heap-dump.hprof
+```
+
+**Analysis Tools:**
+- Eclipse Memory Analyzer (MAT)
+- VisualVM
+- JProfiler
+- YourKit
+
+### Error Logs
+
+JVM crash logs are written to:
+
+```
+$HIVEMQ_HEAPDUMP_FOLDER/hs_err_pid<pid>.log
+```
+
+These contain:
+- Stack trace at crash point
+- Thread information
+- Memory state
+- JVM configuration
+- System information
+
+## Troubleshooting Common Issues
+
+### Memory Issues
+
+#### OutOfMemoryError
+
+**Symptoms:**
+- HiveMQ crashes with OOM error
+- Heap dump generated
+
+**Diagnosis:**
+1. Start in diagnostic mode
+2. Reproduce the issue
+3. Analyze heap dump with MAT or VisualVM
+
+**Common Causes:**
+- Too many retained messages
+- Large message queues for disconnected clients
+- Memory leak in custom extension
+- Insufficient heap size
+
+**Solutions:**
+```bash
+# Increase heap size
+export JAVA_OPTS="-Xmx8g -Xms8g"
+
+# Start in diagnostic mode
+./bin/diagnostics.sh
+```
+
+### Connection Issues
+
+#### Enable Connection Debug Logging
+
+Modify `logback.xml`:
+
+```xml
+<logger name="com.hivemq.bootstrap.netty" level="DEBUG"/>
+<logger name="io.netty" level="DEBUG"/>
+<logger name="com.hivemq.mqtt.handler.connect" level="TRACE"/>
+```
+
+#### Check Port Availability
+
+```bash
+# Linux/macOS
+netstat -an | grep 1883
+lsof -i :1883
+
+# Windows
+netstat -an | findstr 1883
+```
+
+### Message Flow Issues
+
+#### Enable Message Handler Logging
+
+```xml
+<logger name="com.hivemq.mqtt.handler.publish" level="DEBUG"/>
+<logger name="com.hivemq.mqtt.handler.subscribe" level="DEBUG"/>
+<logger name="com.hivemq.metrics.handler" level="DEBUG"/>
+```
+
+#### Monitor Metrics
+
+Connect via JMX (port 9010) and check:
+- `com.hivemq.messages.dropped.count` - Should be 0
+- `com.hivemq.mqtt.connection.not-writable.current` - Should be low
+- Message counters for throughput
+
+### Persistence Issues
+
+#### Enable Persistence Logging
+
+```xml
+<logger name="com.hivemq.persistence" level="DEBUG"/>
+<logger name="jetbrains.exodus" level="INFO"/>
+```
+
+#### Check Disk Space
+
+```bash
+# Linux/macOS
+df -h $HIVEMQ_HOME/data
+
+# Windows
+dir "C:\Program Files\hivemq\data"
+```
+
+### Extension Issues
+
+#### Enable Extension Logging
+
+```xml
+<logger name="com.hivemq.extensions" level="DEBUG"/>
+<logger name="com.hivemq.extension.sdk" level="DEBUG"/>
+```
+
+#### Check Extension Loading
+
+Look for startup messages:
+```
+INFO - Extension <extension-name> version <version> started successfully.
+```
+
+## Performance Diagnostics
+
+### Thread Dumps
+
+Capture thread dumps for performance analysis:
+
+```bash
+# Find HiveMQ process ID
+jps -l | grep hivemq
+
+# Capture thread dump
+jstack <pid> > threaddump.txt
+
+# Or multiple thread dumps
+for i in {1..5}; do jstack <pid> > threaddump_$i.txt; sleep 5; done
+```
+
+### GC Logging
+
+Enable garbage collection logging:
+
+```bash
+export JAVA_OPTS="$JAVA_OPTS -Xlog:gc*:file=gc.log:time,uptime:filecount=10,filesize=10M"
+```
+
+### JMX Monitoring
+
+Connect JConsole or VisualVM to monitor:
+- Heap usage
+- Thread count
+- GC activity
+- CPU usage
+- Custom HiveMQ metrics
+
+## Diagnostic Checklist
+
+When troubleshooting issues:
+
+- [ ] Start HiveMQ in diagnostic mode
+- [ ] Enable appropriate debug logging
+- [ ] Monitor JMX metrics
+- [ ] Check log files for errors
+- [ ] Verify Java version (11+)
+- [ ] Check disk space availability
+- [ ] Review heap dump if OOM occurred
+- [ ] Capture thread dumps if hanging
+- [ ] Monitor GC activity
+- [ ] Test with minimal configuration
+- [ ] Disable extensions to isolate issues
+
+## Getting Help
+
+### Information to Collect
+
+When reporting issues, gather:
+
+1. **Version Information**
+   - HiveMQ version
+   - Java version
+   - Operating system
+
+2. **Logs**
+   - HiveMQ logs with DEBUG level
+   - JVM error logs
+   - GC logs
+
+3. **Configuration**
+   - config.xml
+   - logback.xml
+   - Extension configurations
+
+4. **Diagnostic Data**
+   - Thread dumps
+   - Heap dumps (if OOM)
+   - JMX metrics snapshot
+
+5. **Reproduction Steps**
+   - Minimal configuration to reproduce
+   - Load characteristics
+   - Timeline of events
+
+### Community Support
+
+For HiveMQ Community Edition:
+- GitHub Issues: [HiveMQ Community Edition](https://github.com/hivemq/hivemq-community-edition)
+- HiveMQ Community Forum
+- Stack Overflow (tag: `hivemq`)
+
+## See Also
+
+- [Logging Configuration](/operations/logging) - Configure detailed logging
+- [Monitoring](/operations/monitoring) - JMX monitoring setup
+- [Metrics Reference](/operations/metrics) - Available metrics for diagnostics

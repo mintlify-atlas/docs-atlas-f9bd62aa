@@ -1,0 +1,162 @@
+---
+title: "TCP Transport"
+description: "Configure MQTT over TCP for HiveMQ CE"
+---
+
+## Overview
+
+MQTT over TCP is the standard, unencrypted transport protocol for MQTT connections. HiveMQ CE listens on port 1883 by default for TCP connections.
+
+## Configuration
+
+### Basic TCP Listener
+
+```xml config.xml
+<hivemq>
+  <listeners>
+    <tcp-listener>
+      <port>1883</port>
+      <bind-address>0.0.0.0</bind-address>
+    </tcp-listener>
+  </listeners>
+</hivemq>
+```
+
+### Configuration Options
+
+| Option | Description | Default |
+|--------|-------------|--------|
+| `port` | TCP port number | 1883 |
+| `bind-address` | Network interface to bind | 0.0.0.0 (all interfaces) |
+| `name` | Listener name for identification | auto-generated |
+
+### Multiple Listeners
+
+```xml
+<hivemq>
+  <listeners>
+    <tcp-listener>
+      <port>1883</port>
+      <bind-address>0.0.0.0</bind-address>
+      <name>default-listener</name>
+    </tcp-listener>
+    <tcp-listener>
+      <port>1884</port>
+      <bind-address>192.168.1.100</bind-address>
+      <name>internal-listener</name>
+    </tcp-listener>
+  </listeners>
+</hivemq>
+```
+
+## Connecting Clients
+
+### Python (paho-mqtt)
+
+```python
+import paho.mqtt.client as mqtt
+
+def on_connect(client, userdata, flags, rc):
+    print(f"Connected with result code {rc}")
+
+client = mqtt.Client()
+client.on_connect = on_connect
+client.connect("localhost", 1883, 60)
+client.loop_forever()
+```
+
+### Java (HiveMQ MQTT Client)
+
+```java
+import com.hivemq.client.mqtt.mqtt5.Mqtt5BlockingClient;
+import com.hivemq.client.mqtt.mqtt5.Mqtt5Client;
+
+public class MqttExample {
+    public static void main(String[] args) {
+        Mqtt5BlockingClient client = Mqtt5Client.builder()
+            .identifier("my-client")
+            .serverHost("localhost")
+            .serverPort(1883)
+            .buildBlocking();
+        
+        client.connect();
+        System.out.println("Connected!");
+    }
+}
+```
+
+### JavaScript (MQTT.js)
+
+```javascript
+const mqtt = require('mqtt');
+
+const client = mqtt.connect('mqtt://localhost:1883');
+
+client.on('connect', () => {
+  console.log('Connected!');
+});
+```
+
+### Mosquitto CLI
+
+```bash
+# Subscribe
+mosquitto_sub -h localhost -p 1883 -t "test/topic"
+
+# Publish
+mosquitto_pub -h localhost -p 1883 -t "test/topic" -m "Hello"
+```
+
+## Security Considerations
+
+<Warning>
+  TCP transport is **unencrypted**. Credentials and message payloads are transmitted in plain text. Use TLS for production deployments.
+</Warning>
+
+### When to Use TCP
+
+- ✅ Development and testing
+- ✅ Trusted internal networks
+- ✅ Already encrypted at network layer (VPN)
+- ❌ Public networks
+- ❌ Sensitive data
+- ❌ Compliance requirements
+
+## Firewall Configuration
+
+### Linux (iptables)
+
+```bash
+sudo iptables -A INPUT -p tcp --dport 1883 -j ACCEPT
+sudo iptables-save
+```
+
+### Linux (firewalld)
+
+```bash
+sudo firewall-cmd --permanent --add-port=1883/tcp
+sudo firewall-cmd --reload
+```
+
+### Docker
+
+```bash
+docker run -d --name hivemq-ce -p 1883:1883 hivemq/hivemq-ce
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="TLS Transport" icon="lock" href="/mqtt/transports/tls">
+    Secure your MQTT connections with TLS/SSL
+  </Card>
+  <Card title="Connecting Clients" icon="plug" href="/mqtt/guides/connecting-clients">
+    More client connection examples
+  </Card>
+  <Card title="Configuration Guide" icon="sliders" href="/configuration/listeners">
+    Advanced listener configuration
+  </Card>
+  <Card title="WebSocket Transport" icon="globe" href="/mqtt/transports/websocket">
+    MQTT over WebSocket
+  </Card>
+</CardGroup>

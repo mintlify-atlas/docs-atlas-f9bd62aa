@@ -1,0 +1,487 @@
+---
+title: "MQTT Features"
+description: "Comprehensive guide to MQTT features supported by HiveMQ CE"
+---
+
+## Overview
+
+HiveMQ Community Edition implements all MQTT protocol features defined in MQTT 3.1, 3.1.1, and MQTT 5.0 specifications. This page provides a comprehensive reference for each feature.
+
+## Quality of Service (QoS) Levels
+
+### QoS 0: At Most Once
+
+**Delivery guarantee**: Message may be delivered zero or one time
+
+**Behavior:**
+- No acknowledgment required
+- Lowest overhead
+- "Fire and forget" delivery
+- No message storage
+
+**Use cases:**
+- High-frequency sensor data
+- Ambient telemetry
+- Data where loss is acceptable
+
+```python
+client.publish("sensors/temperature", "22.5", qos=0)
+```
+
+### QoS 1: At Least Once
+
+**Delivery guarantee**: Message delivered at least once, duplicates possible
+
+**Behavior:**
+- Requires PUBACK acknowledgment
+- Messages stored until acknowledged
+- May result in duplicates during retransmission
+
+**Use cases:**
+- Important application messages
+- Commands that can handle duplicates
+- Most general-purpose messaging
+
+```python
+client.publish("devices/command", "start", qos=1)
+```
+
+### QoS 2: Exactly Once
+
+**Delivery guarantee**: Message delivered exactly once
+
+**Behavior:**
+- Four-way handshake (PUBLISH, PUBREC, PUBREL, PUBCOMP)
+- Highest overhead
+- Guaranteed no duplicates
+
+**Use cases:**
+- Financial transactions
+- Billing events
+- Critical commands that must not duplicate
+
+```python
+client.publish("payments/transaction", data, qos=2)
+```
+
+<Info>
+  HiveMQ CE persists QoS 1 and QoS 2 messages to disk (RocksDB) to ensure delivery even after broker restart.
+</Info>
+
+## Retained Messages
+
+### What Are Retained Messages?
+
+Retained messages are stored by the broker and immediately delivered to new subscribers:
+
+```python
+# Publisher sets retain flag
+client.publish("device/status", "online", retain=True)
+
+# New subscriber immediately receives last retained message
+client.subscribe("device/status")
+# Receives "online" immediately
+```
+
+### Retained Message Behavior
+
+- Only one retained message per topic
+- New retained message replaces old one
+- Empty payload clears retained message
+- Retained flag preserved when forwarded to subscribers (MQTT 5)
+
+**Configuration in HiveMQ CE:**
+
+```xml
+<hivemq>
+  <mqtt>
+    <retained-messages>
+      <enabled>true</enabled>
+    </retained-messages>
+  </mqtt>
+</hivemq>
+```
+
+### Use Cases
+
+- **Device status**: Last known state immediately available
+- **Configuration**: Current settings for new clients
+- **Presence**: Online/offline status
+- **Last value**: Most recent sensor reading
+
+<Warning>
+  Retained messages are stored indefinitely. Clear them when no longer needed by publishing empty payload.
+</Warning>
+
+## Persistent Sessions
+
+### Session State
+
+With persistent sessions, the broker maintains:
+
+- Client subscriptions
+- QoS 1 and QoS 2 messages not yet acknowledged
+- QoS 1 and QoS 2 messages received while offline
+
+### MQTT 3.1.1: Clean Session Flag
+
+```python
+# Persistent session (clean_session=False)
+client = mqtt.Client(client_id="device123", clean_session=False)
+client.connect("localhost", 1883, 60)
+```
+
+### MQTT 5: Clean Start + Session Expiry
+
+```python
+from paho.mqtt.properties import Properties
+from paho.mqtt.packettypes import PacketTypes
+
+client = mqtt.Client(client_id="device123", protocol=mqtt.MQTTv5)
+
+connect_props = Properties(PacketTypes.CONNECT)
+connect_props.SessionExpiryInterval = 3600  # 1 hour
+
+client.connect("localhost", 1883, 60, properties=connect_props)
+```
+
+**Session Expiry Values:**
+- **0**: Session expires on disconnect (default)
+- **> 0**: Session persists for N seconds after disconnect
+- **0xFFFFFFFF**: Session never expires
+
+### Queued Messages
+
+HiveMQ CE queues messages for offline clients with persistent sessions:
+
+**Default limits (configurable):**
+- Max queued messages: 1000 per client
+- Strategy when full: discard oldest
+
+```xml
+<hivemq>
+  <mqtt>
+    <queued-messages>
+      <max-queue-size>1000</max-queue-size>
+      <strategy>discard</strategy>
+    </queued-messages>
+  </mqtt>
+</hivemq>
+```
+
+<Tip>
+  Use persistent sessions for mobile and IoT devices with intermittent connectivity.
+</Tip>
+
+## Last Will and Testament (LWT)
+
+### Overview
+
+LWT allows clients to specify a message that the broker publishes if the client disconnects unexpectedly:
+
+```python
+client = mqtt.Client()
+
+# Set Last Will
+client.will_set(
+    topic="devices/device123/status",
+    payload="offline",
+    qos=1,
+    retain=True
+)
+
+client.connect("localhost", 1883, 60)
+```
+
+### LWT Triggers
+
+Broker publishes LWT message when:
+- Network error causes disconnection
+- Client fails to send PINGREQ within keep-alive period
+- Malformed packet forces connection close
+- Server-initiated disconnect (MQTT 5)
+
+**LWT is NOT published when:**
+- Client sends DISCONNECT packet (graceful disconnect)
+
+### MQTT 5 LWT Properties
+
+```python
+from paho.mqtt.properties import Properties
+from paho.mqtt.packettypes import PacketTypes
+
+will_props = Properties(PacketTypes.WILLMESSAGE)
+will_props.WillDelayInterval = 30  # Delay 30 seconds before publishing LWT
+will_props.MessageExpiryInterval = 300  # LWT expires after 5 minutes
+will_props.ContentType = "text/plain"
+will_props.UserProperty = [("device_type", "sensor")]
+
+client.will_set(
+    "devices/device123/status",
+    "offline",
+    qos=1,
+    retain=True,
+    properties=will_props
+)
+```
+
+### Use Cases
+
+- Device status monitoring
+- Alerting systems for unexpected disconnections
+- Presence detection
+- Failover triggers
+
+## Topic Wildcards
+
+### Single-Level Wildcard (+)
+
+Matches exactly one topic level:
+
+```python
+# Subscribe pattern
+client.subscribe("home/+/temperature")
+
+# Matches:
+✅ home/livingroom/temperature
+✅ home/bedroom/temperature
+✅ home/kitchen/temperature
+
+# Does NOT match:
+❌ home/temperature
+❌ home/livingroom/sensors/temperature
+```
+
+### Multi-Level Wildcard (#)
+
+Matches one or more topic levels (must be last character):
+
+```python
+# Subscribe pattern
+client.subscribe("factory/#")
+
+# Matches:
+✅ factory/line1/machine1/temperature
+✅ factory/line2/machine5/status
+✅ factory/alert
+✅ factory
+
+# Subscribe to everything (use cautiously!)
+client.subscribe("#")
+```
+
+### Wildcard Rules
+
+- **Cannot publish** to topics with wildcards
+- `+` must occupy entire topic level
+- `#` must be last character and on its own level
+- `home/+room/temp` is INVALID
+- `home/room+/temp` is INVALID
+- `home/#/temp` is INVALID
+
+<Warning>
+  Avoid subscribing to `#` (all topics) in production as it can cause performance issues and high bandwidth usage.
+</Warning>
+
+## Shared Subscriptions (MQTT 5)
+
+### Overview
+
+Shared subscriptions distribute messages among multiple subscribers in a group:
+
+```python
+# Three workers share the workload
+worker1.subscribe("$share/workers/tasks/#")
+worker2.subscribe("$share/workers/tasks/#")
+worker3.subscribe("$share/workers/tasks/#")
+
+# Messages to tasks/# are distributed round-robin
+```
+
+### Syntax
+
+**Format:** `$share/{group_name}/{topic_filter}`
+
+- **group_name**: Unique identifier for the subscription group
+- **topic_filter**: Standard MQTT topic with optional wildcards
+
+### Distribution Strategy
+
+HiveMQ CE uses round-robin distribution:
+
+```python
+# With 3 subscribers in group "processors"
+$share/processors/orders/#
+
+# Message distribution:
+# Message 1 → Subscriber A
+# Message 2 → Subscriber B
+# Message 3 → Subscriber C
+# Message 4 → Subscriber A
+# Message 5 → Subscriber B
+# ...
+```
+
+### Use Cases
+
+- **Load balancing**: Distribute work across workers
+- **Scalability**: Add more consumers to handle load
+- **High throughput**: Parallel message processing
+- **Microservices**: Multiple instances of same service
+
+<Tip>
+  Use shared subscriptions for horizontally scalable message processing without external load balancers.
+</Tip>
+
+## Keep-Alive
+
+### Purpose
+
+Keep-alive mechanism ensures connection liveness:
+
+- Client sends PINGREQ within keep-alive interval
+- Broker responds with PINGRESP
+- If no PINGREQ received, broker closes connection and publishes LWT
+
+### Configuration
+
+```python
+# Set keep-alive to 60 seconds
+client.connect("localhost", 1883, keepalive=60)
+```
+
+**Values:**
+- **0**: Keep-alive disabled
+- **1-65535**: Keep-alive interval in seconds
+
+**HiveMQ CE settings:**
+
+```xml
+<hivemq>
+  <mqtt>
+    <keep-alive>
+      <max-keep-alive>65535</max-keep-alive>
+      <allow-unlimited>true</allow-unlimited>
+    </keep-alive>
+  </mqtt>
+</hivemq>
+```
+
+### MQTT 5: Server Keep-Alive
+
+Broker can override client's keep-alive:
+
+```python
+def on_connect(client, userdata, flags, reason_code, properties):
+    if hasattr(properties, 'ServerKeepAlive'):
+        print(f"Server keep-alive: {properties.ServerKeepAlive}")
+```
+
+## Message Ordering
+
+HiveMQ CE guarantees message ordering per QoS level:
+
+### Ordering Guarantees
+
+| QoS | Ordering Guarantee |
+|-----|--------------------|
+| QoS 0 | Best effort, no guarantee |
+| QoS 1 | Ordered within single session |
+| QoS 2 | Strict ordering guaranteed |
+
+```python
+# These messages arrive in order at subscriber
+client.publish("topic", "message1", qos=1)
+client.publish("topic", "message2", qos=1)
+client.publish("topic", "message3", qos=1)
+```
+
+<Note>
+  Ordering is guaranteed only for messages from the same publisher to the same subscriber. Messages from different publishers may interleave.
+</Note>
+
+## Topic Aliases (MQTT 5)
+
+Reduce bandwidth by using 2-byte integers instead of long topic names:
+
+```python
+from paho.mqtt.properties import Properties
+from paho.mqtt.packettypes import PacketTypes
+
+# First publish: establish alias
+props = Properties(PacketTypes.PUBLISH)
+props.TopicAlias = 1
+client.publish(
+    "very/long/topic/name/that/uses/bandwidth",
+    "data",
+    properties=props
+)
+
+# Subsequent publishes: use alias
+props = Properties(PacketTypes.PUBLISH)
+props.TopicAlias = 1
+client.publish("", "more data", properties=props)
+```
+
+**Configuration:**
+
+```xml
+<hivemq>
+  <mqtt>
+    <topic-alias>
+      <enabled>true</enabled>
+      <max-per-client>5</max-per-client>
+    </topic-alias>
+  </mqtt>
+</hivemq>
+```
+
+## Request-Response Pattern (MQTT 5)
+
+Built-in support for request-response:
+
+```python
+import uuid
+from paho.mqtt.properties import Properties
+from paho.mqtt.packettypes import PacketTypes
+
+# Requester
+response_topic = f"responses/{uuid.uuid4()}"
+client.subscribe(response_topic)
+
+request_props = Properties(PacketTypes.PUBLISH)
+request_props.ResponseTopic = response_topic
+request_props.CorrelationData = b"req-001"
+
+client.publish("requests/calculate", "2+2", properties=request_props)
+
+# Responder
+def on_message(client, userdata, message):
+    if message.properties and message.properties.ResponseTopic:
+        response_props = Properties(PacketTypes.PUBLISH)
+        response_props.CorrelationData = message.properties.CorrelationData
+        
+        result = eval(message.payload.decode())  # Process request
+        client.publish(
+            message.properties.ResponseTopic,
+            str(result),
+            properties=response_props
+        )
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Configuration" icon="sliders" href="/configuration/mqtt-settings">
+    Configure MQTT settings in HiveMQ CE
+  </Card>
+  <Card title="Transports" icon="network-wired" href="/mqtt/transports/tcp">
+    Set up TCP, TLS, and WebSocket transports
+  </Card>
+  <Card title="Client Guide" icon="plug" href="/mqtt/guides/connecting-clients">
+    Connect MQTT clients to HiveMQ CE
+  </Card>
+  <Card title="QoS Guide" icon="shield" href="/mqtt/guides/quality-of-service">
+    Deep dive into Quality of Service
+  </Card>
+</CardGroup>

@@ -1,0 +1,220 @@
+---
+title: Metrics Reference
+description: Complete reference of HiveMQ metrics for monitoring broker performance
+---
+
+# Metrics Reference
+
+HiveMQ Community Edition exposes comprehensive metrics through JMX that provide insights into broker performance, message flow, connections, and resource usage.
+
+All metrics are defined in `com.hivemq.metrics.HiveMQMetrics` and registered with the Dropwizard Metrics library.
+
+## Message Metrics
+
+### Incoming Messages
+
+#### com.hivemq.messages.incoming.total.count
+- **Type:** Counter
+- **Description:** Total count of all incoming MQTT messages
+- **Use Case:** Track overall message ingestion rate
+- **Since:** 3.0
+
+#### com.hivemq.messages.incoming.connect.count
+- **Type:** Counter
+- **Description:** Total count of incoming MQTT CONNECT messages
+- **Use Case:** Monitor connection attempts and client activity
+- **Since:** 3.0
+
+#### com.hivemq.messages.incoming.publish.count
+- **Type:** Counter
+- **Description:** Total count of incoming MQTT PUBLISH messages
+- **Use Case:** Track message publishing rate from clients
+- **Since:** 3.0
+
+### Outgoing Messages
+
+#### com.hivemq.messages.outgoing.total.count
+- **Type:** Counter
+- **Description:** Total count of all outgoing MQTT messages
+- **Use Case:** Monitor message delivery rate to subscribers
+- **Since:** 3.0
+
+#### com.hivemq.messages.outgoing.publish.count
+- **Type:** Counter
+- **Description:** Total count of outgoing MQTT PUBLISH messages
+- **Use Case:** Track message distribution to clients
+- **Since:** 3.0
+
+### Dropped Messages
+
+#### com.hivemq.messages.dropped.count
+- **Type:** Counter
+- **Description:** Total count of dropped PUBLISH messages
+- **Use Case:** Identify message loss and potential issues
+- **Alert Threshold:** Any non-zero value should be investigated
+- **Since:** 3.0
+
+### Retained Messages
+
+#### com.hivemq.messages.retained.current
+- **Type:** Gauge
+- **Description:** Current count of retained messages stored in the broker
+- **Use Case:** Monitor retained message storage usage
+- **Since:** 3.0
+
+### Will Messages (LWT)
+
+#### com.hivemq.messages.will.count.current
+- **Type:** Counter
+- **Description:** Current count of stored Last Will and Testament messages
+- **Use Case:** Track pending will messages from connected clients
+- **Since:** 2022.1
+
+#### com.hivemq.messages.will.published.count.total
+- **Type:** Counter
+- **Description:** Total count of published Last Will and Testament messages
+- **Use Case:** Monitor client disconnections that triggered will messages
+- **Since:** 2022.1
+
+## Network Metrics
+
+### Connections
+
+#### com.hivemq.networking.connections.current
+- **Type:** Gauge
+- **Description:** Current total number of active client connections
+- **Use Case:** Monitor connection pool size and capacity planning
+- **Since:** 3.0
+
+#### com.hivemq.networking.connections-closed.total.count
+- **Type:** Counter
+- **Description:** Total count of closed network connections
+- **Use Case:** Track connection churn and client behavior
+- **Since:** 3.4
+
+#### com.hivemq.mqtt.connection.not-writable.current
+- **Type:** Counter
+- **Description:** Current count of MQTT client channels that are not writable
+- **Use Case:** Identify backpressure and slow consumers
+- **Alert Threshold:** High values indicate clients cannot keep up with message flow
+- **Since:** 3.0
+
+### Bandwidth
+
+#### com.hivemq.networking.bytes.read.total
+- **Type:** Gauge
+- **Description:** Total bytes read from the network
+- **Use Case:** Monitor inbound network traffic and bandwidth usage
+- **Since:** 3.0
+
+#### com.hivemq.networking.bytes.write.total
+- **Type:** Gauge
+- **Description:** Total bytes written to the network
+- **Use Case:** Monitor outbound network traffic and bandwidth usage
+- **Since:** 3.0
+
+## Session Metrics
+
+### Client Sessions
+
+#### com.hivemq.sessions.overall.current
+- **Type:** Gauge
+- **Description:** Current count of stored client sessions (both connected and disconnected)
+- **Use Case:** Monitor session persistence and memory usage
+- **Since:** 3.0
+
+### Subscriptions
+
+#### com.hivemq.subscriptions.overall.current
+- **Type:** Counter
+- **Description:** Current total count of subscriptions across all clients
+- **Use Case:** Track subscription volume and topic fan-out
+- **Since:** 3.0
+
+## Persistence Memory Metrics
+
+These metrics measure approximate memory usage when using in-memory persistence (default for Community Edition).
+
+#### com.hivemq.persistence.retained-messages.in-memory.total-size
+- **Type:** Gauge
+- **Description:** Approximate memory usage of retained message persistence
+- **Use Case:** Monitor memory consumption for retained messages
+
+#### com.hivemq.persistence.client-sessions.in-memory.total-size
+- **Type:** Gauge
+- **Description:** Approximate memory usage of client session persistence
+- **Use Case:** Monitor memory consumption for session data
+
+#### com.hivemq.persistence.client-session.subscriptions.in-memory.total-size
+- **Type:** Gauge
+- **Description:** Approximate memory usage of subscription persistence
+- **Use Case:** Monitor memory consumption for subscription data
+
+#### com.hivemq.persistence.queued-messages.in-memory.total-size
+- **Type:** Gauge
+- **Description:** Approximate memory usage of queued message persistence
+- **Use Case:** Monitor memory consumption for message queues
+- **Alert Threshold:** Approaching JVM heap limits
+
+## Accessing Metrics
+
+### Via JMX
+
+All metrics are exposed through JMX with the object name pattern:
+
+```
+metrics:name=<metric-name>
+```
+
+Example JMX queries:
+```java
+// Get current connections
+ObjectName on = new ObjectName("metrics:name=com.hivemq.networking.connections.current");
+Object value = mBeanServer.getAttribute(on, "Value");
+```
+
+### Via HiveMQ Extensions
+
+Extensions can access metrics programmatically:
+
+```java
+import com.hivemq.metrics.HiveMQMetrics;
+import com.codahale.metrics.Counter;
+
+// Access a counter metric
+Counter incomingMessages = metricRegistry.counter(
+    HiveMQMetrics.INCOMING_MESSAGE_COUNT.name()
+);
+long count = incomingMessages.getCount();
+```
+
+## Monitoring Recommendations
+
+### Critical Metrics Dashboard
+
+Create dashboards tracking:
+1. **Message Flow:** Incoming vs. outgoing message rates
+2. **Connection Health:** Current connections, connection rate, non-writable connections
+3. **Resource Usage:** Memory persistence sizes, network bandwidth
+4. **Error Indicators:** Dropped messages, closed connections
+
+### Performance Baselines
+
+Establish baselines for:
+- Normal message throughput
+- Typical connection count
+- Average memory usage per session
+- Network I/O patterns
+
+### Capacity Planning
+
+Use metrics to plan for:
+- Memory requirements based on session/message growth
+- Network capacity based on bandwidth trends
+- Connection pool sizing based on concurrent client count
+
+## See Also
+
+- [Monitoring Setup](/operations/monitoring) - Configure JMX and monitoring tools
+- [Diagnostics](/operations/diagnostics) - Troubleshooting with diagnostic mode
+- [Logging](/operations/logging) - Configure logging for metrics events

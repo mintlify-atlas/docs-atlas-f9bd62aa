@@ -1,0 +1,284 @@
+---
+title: MQTT Settings
+description: Configure MQTT protocol behavior in HiveMQ Community Edition
+---
+
+The MQTT settings section allows you to configure various aspects of MQTT protocol behavior, including message handling, session management, and quality of service settings.
+
+## Configuration Section
+
+All MQTT settings are configured within the `<mqtt>` element:
+
+```xml
+<hivemq>
+    <mqtt>
+        <!-- MQTT configuration options -->
+    </mqtt>
+</hivemq>
+```
+
+## Queued Messages
+
+Configure how HiveMQ handles message queuing for disconnected clients.
+
+### Configuration
+
+```xml
+<mqtt>
+    <queued-messages>
+        <max-queue-size>1000</max-queue-size>
+        <strategy>discard</strategy>
+    </queued-messages>
+</mqtt>
+```
+
+### Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `max-queue-size` | Long | `1000` | Maximum number of queued messages per client |
+| `strategy` | Enum | `discard` | Strategy when queue is full: `discard` (drop new messages) or `discard-oldest` (drop oldest messages) |
+
+## Retained Messages
+
+Enable or disable support for retained messages.
+
+```xml
+<mqtt>
+    <retained-messages>
+        <enabled>true</enabled>
+    </retained-messages>
+</mqtt>
+```
+
+**Default:** `true`
+
+## Wildcard Subscriptions
+
+Enable or disable wildcard subscriptions using `+` and `#`.
+
+```xml
+<mqtt>
+    <wildcard-subscriptions>
+        <enabled>true</enabled>
+    </wildcard-subscriptions>
+</mqtt>
+```
+
+**Default:** `true`
+
+## Shared Subscriptions
+
+Enable or disable MQTT 5 shared subscriptions.
+
+```xml
+<mqtt>
+    <shared-subscriptions>
+        <enabled>true</enabled>
+    </shared-subscriptions>
+</mqtt>
+```
+
+**Default:** `true`
+
+## Quality of Service
+
+Configure the maximum allowed QoS level.
+
+```xml
+<mqtt>
+    <quality-of-service>
+        <max-qos>2</max-qos>
+    </quality-of-service>
+</mqtt>
+```
+
+**Values:** `0`, `1`, or `2`  
+**Default:** `2` (exactly once delivery)
+
+## Topic Alias
+
+Configure MQTT 5 topic alias support.
+
+```xml
+<mqtt>
+    <topic-alias>
+        <enabled>true</enabled>
+        <max-per-client>5</max-per-client>
+    </topic-alias>
+</mqtt>
+```
+
+### Options
+
+| Option | Type | Default | Range | Description |
+|--------|------|---------|-------|-------------|
+| `enabled` | Boolean | `true` | - | Enable topic alias feature |
+| `max-per-client` | Integer | `5` | 1-65535 | Maximum topic aliases per client |
+
+## Subscription Identifier
+
+Enable or disable MQTT 5 subscription identifiers.
+
+```xml
+<mqtt>
+    <subscription-identifier>
+        <enabled>true</enabled>
+    </subscription-identifier>
+</mqtt>
+```
+
+**Default:** `true`
+
+## Message Expiry
+
+Configure maximum message expiry interval.
+
+```xml
+<mqtt>
+    <message-expiry>
+        <max-interval>4294967296</max-interval>
+    </message-expiry>
+</mqtt>
+```
+
+**Unit:** Seconds  
+**Default:** `4294967296` (effectively unlimited)  
+**Range:** 0-4294967296
+
+## Session Expiry
+
+Configure maximum session expiry interval.
+
+```xml
+<mqtt>
+    <session-expiry>
+        <max-interval>4294967295</max-interval>
+    </session-expiry>
+</mqtt>
+```
+
+**Unit:** Seconds  
+**Default:** `4294967295` (approximately 136 years)  
+**Range:** 0-4294967295
+
+## Keep Alive
+
+Configure client keep-alive settings.
+
+```xml
+<mqtt>
+    <keep-alive>
+        <max-keep-alive>65535</max-keep-alive>
+        <allow-unlimited>true</allow-unlimited>
+    </keep-alive>
+</mqtt>
+```
+
+### Options
+
+| Option | Type | Default | Range | Description |
+|--------|------|---------|-------|-------------|
+| `max-keep-alive` | Integer | `65535` | 0-65535 | Maximum keep-alive in seconds |
+| `allow-unlimited` | Boolean | `true` | - | Allow clients to disable keep-alive (value 0) |
+
+## Packets
+
+Configure maximum packet size.
+
+```xml
+<mqtt>
+    <packets>
+        <max-packet-size>268435460</max-packet-size>
+    </packets>
+</mqtt>
+```
+
+**Unit:** Bytes  
+**Default:** `268435460` (256 MB)  
+**Range:** 0-268435460
+
+## Receive Maximum
+
+Configure the server's receive maximum for QoS 1 and 2 flow control.
+
+```xml
+<mqtt>
+    <receive-maximum>
+        <server-receive-maximum>10</server-receive-maximum>
+    </receive-maximum>
+</mqtt>
+```
+
+**Default:** `10`  
+**Range:** 1-65535
+
+This setting controls how many QoS 1 and QoS 2 messages the server will accept without acknowledgment.
+
+## Complete Example
+
+Here's a complete example with commonly configured MQTT settings:
+
+```xml
+<hivemq>
+    <mqtt>
+        <queued-messages>
+            <max-queue-size>1000</max-queue-size>
+            <strategy>discard</strategy>
+        </queued-messages>
+
+        <retained-messages>
+            <enabled>true</enabled>
+        </retained-messages>
+
+        <wildcard-subscriptions>
+            <enabled>true</enabled>
+        </wildcard-subscriptions>
+
+        <shared-subscriptions>
+            <enabled>true</enabled>
+        </shared-subscriptions>
+
+        <quality-of-service>
+            <max-qos>2</max-qos>
+        </quality-of-service>
+
+        <topic-alias>
+            <enabled>true</enabled>
+            <max-per-client>5</max-per-client>
+        </topic-alias>
+
+        <subscription-identifier>
+            <enabled>true</enabled>
+        </subscription-identifier>
+
+        <message-expiry>
+            <max-interval>4294967296</max-interval>
+        </message-expiry>
+
+        <session-expiry>
+            <max-interval>4294967295</max-interval>
+        </session-expiry>
+
+        <keep-alive>
+            <max-keep-alive>65535</max-keep-alive>
+            <allow-unlimited>true</allow-unlimited>
+        </keep-alive>
+
+        <packets>
+            <max-packet-size>268435460</max-packet-size>
+        </packets>
+
+        <receive-maximum>
+            <server-receive-maximum>10</server-receive-maximum>
+        </receive-maximum>
+    </mqtt>
+</hivemq>
+```
+
+## Performance Considerations
+
+- Lower `max-queue-size` values reduce memory usage but may drop messages
+- Higher `receive-maximum` values increase throughput but use more memory
+- Disabling unused features (e.g., retained messages) can improve performance
+- Consider your use case when setting expiry intervals

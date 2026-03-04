@@ -1,0 +1,351 @@
+---
+title: Docker Deployment
+description: Deploy HiveMQ Community Edition using Docker containers
+---
+
+HiveMQ Community Edition is available as an official Docker image on [Docker Hub](https://hub.docker.com/r/hivemq/hivemq-ce). This is the recommended approach for containerized deployments.
+
+## Quick Start
+
+Run HiveMQ with a single command:
+
+```bash
+docker run --name hivemq-ce -d -p 1883:1883 hivemq/hivemq-ce
+```
+
+This starts HiveMQ and exposes the MQTT port 1883 on your host machine.
+
+## Docker Image Details
+
+- **Image name**: `hivemq/hivemq-ce`
+- **Base image**: Eclipse Temurin 21 JRE (Ubuntu Noble)
+- **Supported platforms**: 
+  - `linux/amd64`
+  - `linux/arm64/v8`
+- **User ID**: `10000` (non-root user)
+- **Working directory**: `/opt/hivemq`
+
+## Available Tags
+
+<Info>
+  Use specific version tags for production deployments to ensure consistency.
+</Info>
+
+- `latest`: Latest stable release
+- `2025.5`: Specific version
+- `snapshot`: Built from the `master` branch (development)
+
+```bash
+# Use a specific version
+docker run -d -p 1883:1883 hivemq/hivemq-ce:2025.5
+```
+
+## Exposed Ports
+
+The Docker image exposes the following ports:
+
+| Port | Protocol | Description |
+|------|----------|-------------|
+| 1883 | TCP | MQTT over TCP |
+| 8000 | TCP | MQTT over WebSocket |
+
+```bash
+# Expose both MQTT and WebSocket ports
+docker run --name hivemq-ce -d \
+  -p 1883:1883 \
+  -p 8000:8000 \
+  hivemq/hivemq-ce
+```
+
+## Environment Variables
+
+### JAVA_OPTS
+
+Customize JVM settings:
+
+```bash
+docker run --name hivemq-ce -d \
+  -e JAVA_OPTS="-Xmx2g -Xms2g" \
+  -p 1883:1883 \
+  hivemq/hivemq-ce
+```
+
+**Default value**: `-XX:+UnlockExperimentalVMOptions -XX:+UseNUMA`
+
+### HIVEMQ_ALLOW_ALL_CLIENTS
+
+<Warning>
+  The allow-all extension permits any client to connect without authentication. **Only use this for development and testing.**
+</Warning>
+
+Control whether all clients are allowed to connect without authentication:
+
+```bash
+# Enable allow-all extension (default)
+docker run --name hivemq-ce -d \
+  -e HIVEMQ_ALLOW_ALL_CLIENTS=true \
+  -p 1883:1883 \
+  hivemq/hivemq-ce
+
+# Disable allow-all extension
+docker run --name hivemq-ce -d \
+  -e HIVEMQ_ALLOW_ALL_CLIENTS=false \
+  -p 1883:1883 \
+  hivemq/hivemq-ce
+```
+
+**Default value**: `true`
+
+### HIVEMQ_LOG_LEVEL
+
+Set the logging level:
+
+```bash
+docker run --name hivemq-ce -d \
+  -e HIVEMQ_LOG_LEVEL=INFO \
+  -p 1883:1883 \
+  hivemq/hivemq-ce
+```
+
+**Valid values**: `TRACE`, `DEBUG`, `INFO`, `WARN`, `ERROR`
+
+### HOME
+
+The home directory for the HiveMQ process:
+
+**Default value**: `/opt/hivemq`
+
+### LANG
+
+Locale setting:
+
+**Default value**: `en_US.UTF-8`
+
+## Volume Mounts
+
+Persist data and configuration by mounting volumes:
+
+### Data Persistence
+
+```bash
+docker run --name hivemq-ce -d \
+  -p 1883:1883 \
+  -v hivemq-data:/opt/hivemq/data \
+  -v hivemq-log:/opt/hivemq/log \
+  hivemq/hivemq-ce
+```
+
+### Custom Configuration
+
+Mount your own `config.xml`:
+
+```bash
+docker run --name hivemq-ce -d \
+  -p 1883:1883 \
+  -v $(pwd)/config.xml:/opt/hivemq/conf/config.xml:ro \
+  hivemq/hivemq-ce
+```
+
+### Extensions
+
+Add custom extensions:
+
+```bash
+docker run --name hivemq-ce -d \
+  -p 1883:1883 \
+  -v $(pwd)/extensions:/opt/hivemq/extensions \
+  hivemq/hivemq-ce
+```
+
+### Complete Volume Setup
+
+```bash
+docker run --name hivemq-ce -d \
+  -p 1883:1883 \
+  -v hivemq-data:/opt/hivemq/data \
+  -v hivemq-log:/opt/hivemq/log \
+  -v $(pwd)/conf:/opt/hivemq/conf \
+  -v $(pwd)/extensions:/opt/hivemq/extensions \
+  hivemq/hivemq-ce
+```
+
+## Docker Compose
+
+Create a `docker-compose.yml` file:
+
+```yaml docker-compose.yml
+version: '3.8'
+
+services:
+  hivemq:
+    image: hivemq/hivemq-ce:latest
+    container_name: hivemq-ce
+    ports:
+      - "1883:1883"
+      - "8000:8000"
+    environment:
+      - JAVA_OPTS=-Xmx2g -Xms2g
+      - HIVEMQ_ALLOW_ALL_CLIENTS=true
+      - HIVEMQ_LOG_LEVEL=INFO
+    volumes:
+      - hivemq-data:/opt/hivemq/data
+      - hivemq-log:/opt/hivemq/log
+    restart: unless-stopped
+
+volumes:
+  hivemq-data:
+  hivemq-log:
+```
+
+Start with:
+
+```bash
+docker-compose up -d
+```
+
+## Container Directory Structure
+
+Inside the container, HiveMQ is installed at `/opt/hivemq`:
+
+```
+/opt/hivemq/
+├── bin/           # HiveMQ JAR and scripts
+├── conf/          # Configuration files (config.xml, logback.xml)
+├── data/          # Persistent data (volume)
+├── extensions/    # Extensions directory
+├── log/           # Log files (volume)
+└── sbom/          # Software Bill of Materials
+```
+
+## Entrypoint Script
+
+The Docker image uses a custom entrypoint script (`/opt/docker-entrypoint.sh`) that:
+
+1. Checks the `HIVEMQ_ALLOW_ALL_CLIENTS` environment variable
+2. Removes the allow-all extension if set to `false`
+3. Executes the HiveMQ startup script (`/opt/hivemq/bin/run.sh`)
+
+## File Permissions
+
+The container runs as user ID `10000` (non-root). Ensure mounted volumes have appropriate permissions:
+
+```bash
+# Set ownership for mounted directories
+sudo chown -R 10000:10000 ./data ./log ./extensions
+```
+
+## Health Checks
+
+Add a health check to verify HiveMQ is running:
+
+```yaml docker-compose.yml
+services:
+  hivemq:
+    image: hivemq/hivemq-ce:latest
+    healthcheck:
+      test: ["CMD", "test", "-f", "/opt/hivemq/data/.ready"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+```
+
+## Networking
+
+### Bridge Network (Default)
+
+```bash
+docker run --name hivemq-ce -d -p 1883:1883 hivemq/hivemq-ce
+```
+
+### Custom Network
+
+```bash
+# Create network
+docker network create mqtt-network
+
+# Run HiveMQ on custom network
+docker run --name hivemq-ce -d \
+  --network mqtt-network \
+  -p 1883:1883 \
+  hivemq/hivemq-ce
+```
+
+### Host Network
+
+```bash
+docker run --name hivemq-ce -d \
+  --network host \
+  hivemq/hivemq-ce
+```
+
+## Viewing Logs
+
+```bash
+# Follow logs in real-time
+docker logs -f hivemq-ce
+
+# View last 100 lines
+docker logs --tail 100 hivemq-ce
+```
+
+## Stopping and Starting
+
+```bash
+# Stop the container
+docker stop hivemq-ce
+
+# Start the container
+docker start hivemq-ce
+
+# Restart the container
+docker restart hivemq-ce
+
+# Remove the container
+docker rm -f hivemq-ce
+```
+
+## Resource Limits
+
+Set CPU and memory limits:
+
+```bash
+docker run --name hivemq-ce -d \
+  -p 1883:1883 \
+  --memory="4g" \
+  --cpus="2" \
+  hivemq/hivemq-ce
+```
+
+Or in Docker Compose:
+
+```yaml
+services:
+  hivemq:
+    image: hivemq/hivemq-ce:latest
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 4G
+        reservations:
+          cpus: '1'
+          memory: 2G
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Configuration" icon="gear" href="/configuration/overview">
+    Configure HiveMQ settings and listeners
+  </Card>
+  <Card title="Kubernetes" icon="dharmachakra" href="/deployment/docker">
+    Deploy HiveMQ on Kubernetes
+  </Card>
+  <Card title="Security" icon="shield" href="/configuration/security">
+    Secure your MQTT broker
+  </Card>
+  <Card title="Monitoring" icon="chart-line" href="/operations/metrics">
+    Monitor containerized HiveMQ
+  </Card>
+</CardGroup>

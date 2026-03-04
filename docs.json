@@ -1,122 +1,143 @@
 {
   "$schema": "https://mintlify.com/docs.json",
-  "theme": "mint",
-  "name": "Mint Starter Kit",
+  "name": "HiveMQ Community Edition",
+  "theme": "aspen",
   "colors": {
-    "primary": "#16A34A",
-    "light": "#07C983",
-    "dark": "#15803D"
+    "primary": "#e1b926",
+    "light": "#6c530b",
+    "dark": "#1d190e"
   },
-  "favicon": "/favicon.svg",
+  "logo": {
+    "light": "https://media.brand.dev/361ac561-9ff6-4f93-a2a4-a6c6d7b82819.svg",
+    "dark": "https://media.brand.dev/361ac561-9ff6-4f93-a2a4-a6c6d7b82819.svg"
+  },
+  "navbar": {
+    "primary": {
+      "type": "github",
+      "href": "https://github.com/hivemq/hivemq-community-edition"
+    }
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/hivemq/hivemq-community-edition"
+    }
+  },
   "navigation": {
     "tabs": [
       {
-        "tab": "Guides",
+        "tab": "Documentation",
         "groups": [
           {
-            "group": "Getting started",
+            "group": "Get Started",
             "pages": [
-              "index",
+              "introduction",
               "quickstart",
-              "development"
+              "installation"
             ]
           },
           {
-            "group": "Customization",
+            "group": "Deployment",
             "pages": [
-              "essentials/settings",
-              "essentials/navigation"
+              "deployment/binary",
+              "deployment/docker",
+              "deployment/building-from-source"
             ]
           },
           {
-            "group": "Writing content",
+            "group": "Configuration",
             "pages": [
-              "essentials/markdown",
-              "essentials/code",
-              "essentials/images",
-              "essentials/reusable-snippets"
+              "configuration/overview",
+              "configuration/listeners",
+              "configuration/mqtt-settings",
+              "configuration/security",
+              "configuration/persistence",
+              "configuration/restrictions"
             ]
           },
           {
-            "group": "AI tools",
+            "group": "Extensions",
             "pages": [
-              "ai-tools/cursor",
-              "ai-tools/claude-code",
-              "ai-tools/windsurf"
+              "extensions/overview",
+              "extensions/extension-sdk",
+              "extensions/authentication",
+              "extensions/authorization",
+              "extensions/client-initializers",
+              "extensions/packet-interceptors"
+            ]
+          },
+          {
+            "group": "Operations",
+            "pages": [
+              "operations/monitoring",
+              "operations/metrics",
+              "operations/logging",
+              "operations/diagnostics"
             ]
           }
         ]
       },
       {
-        "tab": "API reference",
+        "tab": "Embedded Mode",
         "groups": [
           {
-            "group": "API documentation",
+            "group": "Getting Started",
             "pages": [
-              "api-reference/introduction"
+              "embedded/overview",
+              "embedded/installation",
+              "embedded/quickstart"
             ]
           },
           {
-            "group": "Endpoint examples",
+            "group": "API Reference",
             "pages": [
-              "api-reference/endpoint/get",
-              "api-reference/endpoint/create",
-              "api-reference/endpoint/delete",
-              "api-reference/endpoint/webhook"
+              "embedded/api/embedded-hivemq",
+              "embedded/api/embedded-hivemq-builder",
+              "embedded/api/embedded-extension",
+              "embedded/api/embedded-extension-builder"
+            ]
+          },
+          {
+            "group": "Advanced",
+            "pages": [
+              "embedded/advanced/configuration",
+              "embedded/advanced/persistence",
+              "embedded/advanced/dependency-exclusions"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "MQTT",
+        "groups": [
+          {
+            "group": "MQTT Protocol",
+            "pages": [
+              "mqtt/overview",
+              "mqtt/mqtt3",
+              "mqtt/mqtt5",
+              "mqtt/features"
+            ]
+          },
+          {
+            "group": "Transport Protocols",
+            "pages": [
+              "mqtt/transports/tcp",
+              "mqtt/transports/tls",
+              "mqtt/transports/websocket",
+              "mqtt/transports/secure-websocket"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "mqtt/guides/connecting-clients",
+              "mqtt/guides/publishing-subscribing",
+              "mqtt/guides/quality-of-service",
+              "mqtt/guides/retained-messages"
             ]
           }
         ]
       }
-    ],
-    "global": {
-      "anchors": [
-        {
-          "anchor": "Documentation",
-          "href": "https://mintlify.com/docs",
-          "icon": "book-open-cover"
-        },
-        {
-          "anchor": "Blog",
-          "href": "https://mintlify.com/blog",
-          "icon": "newspaper"
-        }
-      ]
-    }
-  },
-  "logo": {
-    "light": "/logo/light.svg",
-    "dark": "/logo/dark.svg"
-  },
-  "navbar": {
-    "links": [
-      {
-        "label": "Support",
-        "href": "mailto:hi@mintlify.com"
-      }
-    ],
-    "primary": {
-      "type": "button",
-      "label": "Dashboard",
-      "href": "https://dashboard.mintlify.com"
-    }
-  },
-  "contextual": {
-    "options": [
-     "copy",
-     "view",
-     "chatgpt",
-     "claude",
-     "perplexity",
-     "mcp",
-     "cursor",
-     "vscode"
-   ]
-  },
-  "footer": {
-    "socials": {
-      "x": "https://x.com/mintlify",
-      "github": "https://github.com/mintlify",
-      "linkedin": "https://linkedin.com/company/mintlify"
-    }
+    ]
   }
 }

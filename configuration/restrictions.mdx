@@ -1,0 +1,242 @@
+---
+title: Restrictions
+description: Configure connection limits and restrictions in HiveMQ Community Edition
+---
+
+Restrictions allow you to set limits on connections, client identifiers, topics, timeouts, and bandwidth to protect your broker from resource exhaustion.
+
+## Configuration Section
+
+All restrictions are configured within the `<restrictions>` element:
+
+```xml
+<hivemq>
+    <restrictions>
+        <!-- Restriction options -->
+    </restrictions>
+</hivemq>
+```
+
+## Maximum Connections
+
+Limit the total number of concurrent MQTT client connections.
+
+### Configuration
+
+```xml
+<restrictions>
+    <max-connections>-1</max-connections>
+</restrictions>
+```
+
+**Default:** `-1` (unlimited)  
+**Range:** -1 or any positive number
+
+### Description
+
+- `-1` means unlimited connections (subject to license limits)
+- Any positive number limits concurrent connections to that value
+- When the limit is reached, new connection attempts are rejected
+
+### Example
+
+```xml
+<restrictions>
+    <max-connections>10000</max-connections>
+</restrictions>
+```
+
+## Maximum Client ID Length
+
+Restrict the maximum length of client identifiers.
+
+### Configuration
+
+```xml
+<restrictions>
+    <max-client-id-length>65535</max-client-id-length>
+</restrictions>
+```
+
+**Default:** `65535`  
+**Range:** 1-65535
+
+### Description
+
+Clients attempting to connect with a client identifier longer than this limit will be disconnected.
+
+### Example
+
+```xml
+<restrictions>
+    <max-client-id-length>256</max-client-id-length>
+</restrictions>
+```
+
+## Maximum Topic Length
+
+Restrict the maximum length of topic names.
+
+### Configuration
+
+```xml
+<restrictions>
+    <max-topic-length>65535</max-topic-length>
+</restrictions>
+```
+
+**Default:** `65535`  
+**Range:** 1-65535
+
+### Description
+
+Publish and subscribe operations with topics longer than this limit will be rejected.
+
+### Example
+
+```xml
+<restrictions>
+    <max-topic-length>1024</max-topic-length>
+</restrictions>
+```
+
+## No-Connect Idle Timeout
+
+Disconnect TCP connections that don't send a CONNECT packet within the timeout period.
+
+### Configuration
+
+```xml
+<restrictions>
+    <no-connect-idle-timeout>10000</no-connect-idle-timeout>
+</restrictions>
+```
+
+**Default:** `10000` milliseconds (10 seconds)  
+**Range:** Minimum 1 millisecond
+
+### Description
+
+After a TCP connection is established, the client must send a CONNECT packet within this timeout. If not, HiveMQ closes the connection.
+
+This prevents resource exhaustion from connections that never complete the MQTT handshake.
+
+### Example
+
+```xml
+<restrictions>
+    <no-connect-idle-timeout>5000</no-connect-idle-timeout> <!-- 5 seconds -->
+</restrictions>
+```
+
+## Incoming Bandwidth Throttling
+
+Limit the global incoming bandwidth from all clients.
+
+### Configuration
+
+```xml
+<restrictions>
+    <incoming-bandwidth-throttling>0</incoming-bandwidth-throttling>
+</restrictions>
+```
+
+**Default:** `0` (unlimited)  
+**Unit:** Bytes per second
+
+### Description
+
+- `0` means no throttling
+- Any positive number limits the total incoming bandwidth to that many bytes per second
+- Useful for preventing bandwidth exhaustion
+
+### Example
+
+```xml
+<restrictions>
+    <incoming-bandwidth-throttling>10485760</incoming-bandwidth-throttling> <!-- 10 MB/s -->
+</restrictions>
+```
+
+## Complete Example
+
+Here's a complete example with all restriction settings:
+
+```xml
+<hivemq>
+    <restrictions>
+        <!-- Maximum 10,000 concurrent connections -->
+        <max-connections>10000</max-connections>
+
+        <!-- Client IDs limited to 256 characters -->
+        <max-client-id-length>256</max-client-id-length>
+
+        <!-- Topics limited to 1024 characters -->
+        <max-topic-length>1024</max-topic-length>
+
+        <!-- 5 second timeout for CONNECT packet -->
+        <no-connect-idle-timeout>5000</no-connect-idle-timeout>
+
+        <!-- Limit incoming bandwidth to 100 MB/s -->
+        <incoming-bandwidth-throttling>104857600</incoming-bandwidth-throttling>
+    </restrictions>
+</hivemq>
+```
+
+## Use Cases
+
+### Protect Against Resource Exhaustion
+
+```xml
+<restrictions>
+    <max-connections>5000</max-connections>
+    <no-connect-idle-timeout>3000</no-connect-idle-timeout>
+    <incoming-bandwidth-throttling>52428800</incoming-bandwidth-throttling> <!-- 50 MB/s -->
+</restrictions>
+```
+
+### Strict Identifier and Topic Limits
+
+```xml
+<restrictions>
+    <max-client-id-length>128</max-client-id-length>
+    <max-topic-length>512</max-topic-length>
+</restrictions>
+```
+
+### Development/Testing (Relaxed Limits)
+
+```xml
+<restrictions>
+    <max-connections>-1</max-connections>
+    <max-client-id-length>65535</max-client-id-length>
+    <max-topic-length>65535</max-topic-length>
+    <no-connect-idle-timeout>30000</no-connect-idle-timeout>
+    <incoming-bandwidth-throttling>0</incoming-bandwidth-throttling>
+</restrictions>
+```
+
+## Monitoring
+
+Monitor these metrics to determine appropriate restriction values:
+
+- Current connection count
+- Connection rate
+- Incoming bandwidth usage
+- Client ID and topic lengths in your application
+- Connection establishment time
+
+## Best Practices
+
+1. **Set `max-connections`** based on your infrastructure capacity and expected load
+2. **Keep `no-connect-idle-timeout` low** (5-10 seconds) to prevent connection attacks
+3. **Use `incoming-bandwidth-throttling`** to prevent bandwidth exhaustion
+4. **Set realistic client ID and topic length limits** based on your application
+5. **Monitor rejection rates** to ensure limits aren't too restrictive
+6. **Test limits under load** before deploying to production
+
+## Related Configuration
+
+- [MQTT Settings](/configuration/mqtt-settings) - Configure message queuing and session limits
+- [Listeners](/configuration/listeners) - Configure network listeners
+- [Persistence](/configuration/persistence) - Configure data storage

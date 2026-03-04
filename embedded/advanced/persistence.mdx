@@ -1,0 +1,304 @@
+---
+title: "Persistence"
+description: "Configure persistence options for HiveMQ Community Edition Embedded Mode"
+---
+
+HiveMQ CE Embedded Mode supports different persistence types for storing client sessions, queued messages, and retained messages.
+
+## Persistence Types
+
+HiveMQ supports two main persistence backends:
+
+- **FILE** - Xodus-based file persistence (lightweight)
+- **FILE_NATIVE** - RocksDB-based file persistence (high performance)
+
+### Default Persistence
+
+By default, HiveMQ uses **RocksDB** (`FILE_NATIVE`) for persistence, which provides high performance for production workloads.
+
+## Persistence Layers
+
+HiveMQ has two main persistence layers that can be configured independently:
+
+1. **Payload Persistence** - Stores MQTT message payloads
+2. **Retained Message Persistence** - Stores retained messages
+
+## Configuring Persistence Type
+
+You can configure the persistence type using `InternalConfigurations` **before** calling `start()`:
+
+```java
+import com.hivemq.configuration.service.InternalConfigurations;
+import com.hivemq.embedded.EmbeddedHiveMQ;
+import com.hivemq.migration.meta.PersistenceType;
+import java.nio.file.Path;
+
+public class PersistenceConfiguration {
+    public static void main(String[] args) {
+        try (EmbeddedHiveMQ hivemq = EmbeddedHiveMQ.builder()
+                .withDataFolder(Path.of("/var/lib/hivemq/data"))
+                .build()) {
+            
+            // Configure persistence before starting
+            InternalConfigurations.PAYLOAD_PERSISTENCE_TYPE.set(PersistenceType.FILE);
+            InternalConfigurations.RETAINED_MESSAGE_PERSISTENCE_TYPE.set(PersistenceType.FILE);
+            
+            hivemq.start().join();
+            System.out.println("HiveMQ started with Xodus persistence");
+            
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+}
+```
+
+## Using RocksDB Persistence (Default)
+
+RocksDB provides high-performance persistence and is the default option:
+
+```java
+import com.hivemq.configuration.service.InternalConfigurations;
+import com.hivemq.migration.meta.PersistenceType;
+
+// RocksDB persistence (default)
+InternalConfigurations.PAYLOAD_PERSISTENCE_TYPE.set(PersistenceType.FILE_NATIVE);
+InternalConfigurations.RETAINED_MESSAGE_PERSISTENCE_TYPE.set(PersistenceType.FILE_NATIVE);
+```
+
+**Advantages:**
+- High performance for large datasets
+- Efficient memory usage
+- Production-ready
+
+**Dependency:**
+- Requires `org.rocksdb:rocksdbjni` dependency
+
+## Using Xodus Persistence
+
+Xodus is a lightweight pure-Java persistence option:
+
+```java
+import com.hivemq.configuration.service.InternalConfigurations;
+import com.hivemq.migration.meta.PersistenceType;
+
+// Xodus persistence
+InternalConfigurations.PAYLOAD_PERSISTENCE_TYPE.set(PersistenceType.FILE);
+InternalConfigurations.RETAINED_MESSAGE_PERSISTENCE_TYPE.set(PersistenceType.FILE);
+```
+
+**Advantages:**
+- Pure Java implementation (no native dependencies)
+- Smaller footprint
+- Suitable for testing and smaller deployments
+
+**Use Cases:**
+- Development and testing
+- Environments where native libraries are problematic
+- Smaller scale deployments
+
+## In-Memory Persistence
+
+For testing or scenarios where data persistence is not needed, you can use in-memory storage by not configuring a data folder:
+
+```java
+import com.hivemq.embedded.EmbeddedHiveMQ;
+
+public class InMemoryPersistence {
+    public static void main(String[] args) {
+        // No data folder = in-memory persistence
+        try (EmbeddedHiveMQ hivemq = EmbeddedHiveMQ.builder().build()) {
+            hivemq.start().join();
+            System.out.println("HiveMQ running with in-memory persistence");
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+}
+```
+
+<Warning>
+With in-memory persistence, all data is lost when the broker stops or restarts.
+</Warning>
+
+## Data Persistence Across Restarts
+
+To retain data across restarts, configure a persistent data folder:
+
+```java
+import com.hivemq.embedded.EmbeddedHiveMQ;
+import java.nio.file.Path;
+
+public class PersistentData {
+    public static void main(String[] args) {
+        // First run - creates data
+        try (EmbeddedHiveMQ hivemq = EmbeddedHiveMQ.builder()
+                .withDataFolder(Path.of("/var/lib/hivemq/data"))
+                .build()) {
+            
+            hivemq.start().join();
+            System.out.println("First run - data will be persisted");
+            
+            // Clients connect, publish, subscribe...
+            Thread.sleep(60000);
+            
+            hivemq.stop().join();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        
+        // Second run - data is restored
+        try (EmbeddedHiveMQ hivemq = EmbeddedHiveMQ.builder()
+                .withDataFolder(Path.of("/var/lib/hivemq/data"))
+                .build()) {
+            
+            hivemq.start().join();
+            System.out.println("Second run - data restored from disk");
+            
+            // Sessions, queued messages, retained messages are restored
+            
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+}
+```
+
+<Info>
+If no enduring persistence type (such as file persistence) is configured, the restarted broker does not retain its state.
+</Info>
+
+## Persistence Tuning
+
+### Bucket Count
+
+The persistence bucket count affects performance and concurrency:
+
+```java
+import com.hivemq.configuration.service.InternalConfigurations;
+
+// Increase bucket count for better concurrency
+InternalConfigurations.PERSISTENCE_BUCKET_COUNT.set(64);
+InternalConfigurations.PAYLOAD_PERSISTENCE_BUCKET_COUNT.set(64);
+```
+
+**Recommendations:**
+- Default: 64 buckets
+- Higher values: Better concurrency, more file handles
+- Lower values: Fewer resources, less concurrency
+
+### Cleanup Schedule
+
+Configure how often persistence cleanup runs:
+
+```java
+import com.hivemq.configuration.service.InternalConfigurations;
+
+// Cleanup schedule in milliseconds
+InternalConfigurations.PAYLOAD_PERSISTENCE_CLEANUP_SCHEDULE_MSEC.set(60000); // 60 seconds
+```
+
+### RocksDB-Specific Tuning
+
+For RocksDB persistence, you can tune memory and cache settings:
+
+```java
+import com.hivemq.configuration.service.InternalConfigurations;
+
+// Memtable size (affects write performance)
+InternalConfigurations.PAYLOAD_PERSISTENCE_MEMTABLE_SIZE_PORTION.set(2048);
+
+// Block cache size (affects read performance)
+InternalConfigurations.PAYLOAD_PERSISTENCE_BLOCK_CACHE_SIZE_PORTION.set(32);
+
+// Enable force flush (increases durability, decreases performance)
+InternalConfigurations.PUBLISH_PAYLOAD_FORCE_FLUSH_ENABLED.set(true);
+```
+
+## Excluding RocksDB Dependency
+
+If you want to use Xodus persistence only and reduce the application size, you can exclude RocksDB. See the [Dependency Exclusions](/embedded/advanced/dependency-exclusions) guide for details.
+
+## Complete Persistence Example
+
+```java
+import com.hivemq.configuration.service.InternalConfigurations;
+import com.hivemq.embedded.EmbeddedHiveMQ;
+import com.hivemq.migration.meta.PersistenceType;
+import java.nio.file.Path;
+
+public class CompletePersistenceExample {
+    public static void main(String[] args) {
+        try (EmbeddedHiveMQ hivemq = EmbeddedHiveMQ.builder()
+                .withDataFolder(Path.of("/var/lib/hivemq/data"))
+                .build()) {
+            
+            // Choose persistence type
+            InternalConfigurations.PAYLOAD_PERSISTENCE_TYPE.set(PersistenceType.FILE);
+            InternalConfigurations.RETAINED_MESSAGE_PERSISTENCE_TYPE.set(PersistenceType.FILE);
+            
+            // Performance tuning
+            InternalConfigurations.PERSISTENCE_BUCKET_COUNT.set(64);
+            InternalConfigurations.PAYLOAD_PERSISTENCE_CLEANUP_SCHEDULE_MSEC.set(60000);
+            
+            // Start the broker
+            hivemq.start().join();
+            System.out.println("HiveMQ started with configured persistence");
+            
+            // Your application logic
+            
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+}
+```
+
+## Persistence Best Practices
+
+### For Production
+
+- Use **RocksDB** (`FILE_NATIVE`) for best performance
+- Configure a dedicated data folder on fast storage (SSD)
+- Set appropriate bucket counts based on your workload
+- Monitor disk space and I/O performance
+
+### For Testing
+
+- Use **in-memory** persistence for unit tests
+- Use **Xodus** (`FILE`) for integration tests
+- Use temporary directories that are cleaned up after tests
+
+### For Development
+
+- Use **Xodus** (`FILE`) for simplicity
+- Consider excluding RocksDB to reduce build size
+- Use a local data folder for easy inspection
+
+## Monitoring Persistence
+
+You can monitor persistence metrics through the metric registry:
+
+```java
+import com.codahale.metrics.MetricRegistry;
+import com.hivemq.embedded.EmbeddedHiveMQ;
+
+try (EmbeddedHiveMQ hivemq = EmbeddedHiveMQ.builder().build()) {
+    hivemq.start().join();
+    
+    MetricRegistry metrics = hivemq.getMetricRegistry();
+    
+    // Monitor persistence metrics
+    metrics.getMetrics().forEach((name, metric) -> {
+        if (name.contains("persistence")) {
+            System.out.println(name + ": " + metric);
+        }
+    });
+}
+```
+
+## See Also
+
+- [Configuration](/embedded/advanced/configuration) - General configuration options
+- [Dependency Exclusions](/embedded/advanced/dependency-exclusions) - Exclude RocksDB dependency
+- [HiveMQ Persistence Documentation](https://www.hivemq.com/docs/hivemq/latest/user-guide/persistence.html)

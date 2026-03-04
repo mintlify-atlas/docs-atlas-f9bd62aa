@@ -1,0 +1,308 @@
+---
+title: Logging Configuration
+description: Configure HiveMQ logging levels, appenders, and output formats
+---
+
+# Logging Configuration
+
+HiveMQ Community Edition uses Logback as its logging framework, providing flexible and powerful logging configuration capabilities.
+
+## Default Configuration
+
+HiveMQ ships with a default Logback configuration located at:
+```
+src/main/resources/logback.xml
+```
+
+The default configuration includes:
+- Console appender with formatted output
+- INFO level logging for most components
+- Special log levels for third-party libraries
+- Migration warnings
+
+## Logback Configuration File
+
+### Default logback.xml
+
+```xml
+<configuration scan="false">
+
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%-30(%d %level)- %msg%n%ex</pattern>
+        </encoder>
+    </appender>
+
+    <logger name="migrations" level="WARN" additivity="false">
+        <appender-ref ref="CONSOLE"/>
+    </logger>
+
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+    </root>
+
+    <logger name="jetbrains.exodus" level="WARN"/>
+    <logger name="org.eclipse.jetty" level="ERROR"/>
+    <logger name="com.google.common.util.concurrent.Futures.CombinedFuture" level="OFF"/>
+    <logger name="oshi" level="ERROR"/>
+
+</configuration>
+```
+
+## Log Levels
+
+### Available Log Levels
+
+Logback supports the following log levels (from most to least verbose):
+
+1. **TRACE** - Very detailed debugging information
+2. **DEBUG** - Detailed debugging information
+3. **INFO** - Informational messages (default)
+4. **WARN** - Warning messages for potentially problematic situations
+5. **ERROR** - Error messages for serious problems
+6. **OFF** - Disable logging
+
+### Default Log Levels
+
+| Component | Level | Purpose |
+|-----------|-------|----------|
+| Root | INFO | Default for all HiveMQ components |
+| migrations | WARN | Database migration warnings |
+| jetbrains.exodus | WARN | Persistence library messages |
+| org.eclipse.jetty | ERROR | HTTP server errors only |
+| com.google.common.util.concurrent.Futures.CombinedFuture | OFF | Suppress Guava future warnings |
+| oshi | ERROR | System metrics library errors |
+
+## Customizing Logging
+
+### Changing Log Levels
+
+To enable debug logging for HiveMQ components:
+
+```xml
+<configuration scan="false">
+    <!-- Existing appenders -->
+    
+    <!-- Enable DEBUG for all HiveMQ classes -->
+    <logger name="com.hivemq" level="DEBUG"/>
+    
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+    </root>
+</configuration>
+```
+
+### Component-Specific Logging
+
+Enable detailed logging for specific components:
+
+```xml
+<!-- Debug MQTT message processing -->
+<logger name="com.hivemq.mqtt.handler" level="DEBUG"/>
+
+<!-- Debug persistence operations -->
+<logger name="com.hivemq.persistence" level="DEBUG"/>
+
+<!-- Debug metrics collection -->
+<logger name="com.hivemq.metrics" level="DEBUG"/>
+
+<!-- Debug client connections -->
+<logger name="com.hivemq.bootstrap.netty" level="DEBUG"/>
+```
+
+## Appenders
+
+### Console Appender
+
+The default console appender outputs to standard output:
+
+```xml
+<appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+    <encoder>
+        <pattern>%-30(%d %level)- %msg%n%ex</pattern>
+    </encoder>
+</appender>
+```
+
+**Pattern Breakdown:**
+- `%-30(%d %level)` - Date and log level (left-aligned, 30 chars)
+- `%msg` - Log message
+- `%n` - Newline
+- `%ex` - Exception stack trace (if present)
+
+### File Appender
+
+To log to a file instead of console:
+
+```xml
+<appender name="FILE" class="ch.qos.logback.core.FileAppender">
+    <file>hivemq.log</file>
+    <encoder>
+        <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+    </encoder>
+</appender>
+
+<root level="INFO">
+    <appender-ref ref="FILE"/>
+</root>
+```
+
+### Rolling File Appender
+
+For production environments, use a rolling file appender:
+
+```xml
+<appender name="ROLLING" class="ch.qos.logback.core.rolling.RollingFileAppender">
+    <file>logs/hivemq.log</file>
+    <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+        <!-- Daily rollover -->
+        <fileNamePattern>logs/hivemq.%d{yyyy-MM-dd}.log</fileNamePattern>
+        <!-- Keep 30 days of history -->
+        <maxHistory>30</maxHistory>
+        <!-- Maximum size of all log files -->
+        <totalSizeCap>10GB</totalSizeCap>
+    </rollingPolicy>
+    <encoder>
+        <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+    </encoder>
+</appender>
+```
+
+### Async Appender
+
+For high-throughput scenarios, wrap appenders with async appender:
+
+```xml
+<appender name="ASYNC" class="ch.qos.logback.classic.AsyncAppender">
+    <queueSize>512</queueSize>
+    <discardingThreshold>0</discardingThreshold>
+    <appender-ref ref="ROLLING" />
+</appender>
+
+<root level="INFO">
+    <appender-ref ref="ASYNC"/>
+</root>
+```
+
+## Pattern Formats
+
+### Common Pattern Elements
+
+| Pattern | Description | Example |
+|---------|-------------|----------|
+| `%d` | Date and time | `2024-03-15 14:30:45` |
+| `%d{ISO8601}` | ISO8601 format | `2024-03-15T14:30:45.123Z` |
+| `%level` | Log level | `INFO`, `DEBUG`, `ERROR` |
+| `%-5level` | Log level (padded) | `INFO `, `DEBUG` |
+| `%logger` | Logger name | `com.hivemq.bootstrap.HiveMQServer` |
+| `%logger{36}` | Abbreviated logger | `c.h.bootstrap.HiveMQServer` |
+| `%thread` | Thread name | `main`, `pool-1-thread-1` |
+| `%msg` | Log message | Actual log message |
+| `%n` | Newline | Platform-specific newline |
+| `%ex` | Exception | Full stack trace |
+
+### JSON Logging
+
+For structured logging (useful with log aggregation tools):
+
+```xml
+<appender name="JSON" class="ch.qos.logback.core.ConsoleAppender">
+    <encoder class="net.logstash.logback.encoder.LogstashEncoder"/>
+</appender>
+```
+
+<Note>
+Requires adding `logstash-logback-encoder` dependency to your HiveMQ setup.
+</Note>
+
+## Dynamic Log Level Changes
+
+### Enable Configuration Scanning
+
+Enable automatic configuration reload:
+
+```xml
+<configuration scan="true" scanPeriod="30 seconds">
+    <!-- Configuration -->
+</configuration>
+```
+
+This allows changing log levels without restarting HiveMQ.
+
+### Via JMX
+
+Log levels can also be changed at runtime using JMX MBeans (if JMX is enabled).
+
+## Troubleshooting
+
+### Enable Debug Logging
+
+For troubleshooting issues:
+
+```xml
+<logger name="com.hivemq" level="DEBUG"/>
+<logger name="com.hivemq.mqtt.handler" level="TRACE"/>
+```
+
+### Common Debug Scenarios
+
+**Connection Issues:**
+```xml
+<logger name="com.hivemq.bootstrap.netty" level="DEBUG"/>
+<logger name="io.netty" level="DEBUG"/>
+```
+
+**Authentication/Authorization:**
+```xml
+<logger name="com.hivemq.security" level="DEBUG"/>
+<logger name="com.hivemq.extensions.auth" level="DEBUG"/>
+```
+
+**Message Flow:**
+```xml
+<logger name="com.hivemq.mqtt.handler.publish" level="DEBUG"/>
+<logger name="com.hivemq.mqtt.handler.subscribe" level="DEBUG"/>
+```
+
+**Persistence:**
+```xml
+<logger name="com.hivemq.persistence" level="DEBUG"/>
+<logger name="jetbrains.exodus" level="INFO"/>
+```
+
+## Best Practices
+
+### Production Logging
+
+1. **Use INFO level** for normal operations
+2. **Enable file appenders** with rotation
+3. **Set size limits** to prevent disk exhaustion
+4. **Use async appenders** for better performance
+5. **Suppress verbose libraries** (Jetty, Netty, etc.)
+6. **Monitor log file sizes** and rotation
+
+### Development Logging
+
+1. **Use DEBUG or TRACE** for detailed information
+2. **Console appender** for immediate feedback
+3. **Enable HiveMQ component logging** as needed
+4. **Disable scanning** for better performance in dev
+
+### Security Considerations
+
+<Warning>
+- Avoid logging sensitive data (passwords, tokens, PII)
+- Be cautious with TRACE level in production
+- Ensure log files have appropriate permissions
+- Consider log encryption for sensitive environments
+</Warning>
+
+## Diagnostic Mode
+
+HiveMQ can be started in diagnostic mode with enhanced logging. See [Diagnostics](/operations/diagnostics) for details.
+
+## See Also
+
+- [Monitoring](/operations/monitoring) - JMX and metrics monitoring
+- [Diagnostics](/operations/diagnostics) - Diagnostic mode and troubleshooting
+- [Logback Documentation](http://logback.qos.ch/manual/) - Official Logback manual

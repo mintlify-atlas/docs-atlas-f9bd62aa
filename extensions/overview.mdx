@@ -1,0 +1,240 @@
+---
+title: "Extensions Overview"
+description: "Extend HiveMQ Community Edition with custom authentication, authorization, and MQTT packet processing"
+---
+
+## What are Extensions?
+
+HiveMQ Community Edition extensions allow you to customize and extend the MQTT broker's functionality using Java. Extensions enable you to implement custom business logic for:
+
+- **Authentication** - Verify client identities using custom credential sources
+- **Authorization** - Control publish and subscribe permissions
+- **Client Initialization** - Set up client-specific context when clients connect
+- **Packet Interception** - Intercept and modify MQTT packets
+- **Event Handling** - React to client lifecycle events
+
+## Extension System Architecture
+
+Extensions run within HiveMQ's extension system, which provides:
+
+- **Isolated Class Loading** - Each extension runs in its own classloader
+- **Lifecycle Management** - Extensions are started and stopped automatically
+- **Service APIs** - Access to HiveMQ services for clients, subscriptions, and retained messages
+- **Asynchronous Processing** - Non-blocking execution for high performance
+
+## Extension Structure
+
+Every extension consists of:
+
+### Extension Descriptor
+
+A `hivemq-extension.xml` file that defines extension metadata:
+
+```xml
+<?xml version="1.0" encoding="UTF-8" ?>
+<hivemq-extension>
+    <id>my-extension</id>
+    <version>1.0.0</version>
+    <name>My Custom Extension</name>
+    <author>Your Name</author>
+    <priority>0</priority>
+    <start-priority>1000</start-priority>
+</hivemq-extension>
+```
+
+**Fields:**
+- `id` - Unique extension identifier
+- `version` - Extension version number
+- `name` - Human-readable extension name
+- `author` - Extension author
+- `priority` - Execution priority (lower = higher priority)
+- `start-priority` - Startup order priority
+
+### Extension Main Class
+
+A Java class implementing `ExtensionMain` from the HiveMQ Extension SDK:
+
+```java
+import com.hivemq.extension.sdk.api.ExtensionMain;
+import com.hivemq.extension.sdk.api.parameter.ExtensionStartInput;
+import com.hivemq.extension.sdk.api.parameter.ExtensionStartOutput;
+import com.hivemq.extension.sdk.api.parameter.ExtensionStopInput;
+import com.hivemq.extension.sdk.api.parameter.ExtensionStopOutput;
+import com.hivemq.extension.sdk.api.annotations.NotNull;
+
+public class MyExtensionMain implements ExtensionMain {
+
+    @Override
+    public void extensionStart(
+            @NotNull ExtensionStartInput input,
+            @NotNull ExtensionStartOutput output) {
+        // Initialize extension
+        // Register authenticators, authorizers, initializers, interceptors
+    }
+
+    @Override
+    public void extensionStop(
+            @NotNull ExtensionStopInput input,
+            @NotNull ExtensionStopOutput output) {
+        // Clean up resources
+    }
+}
+```
+
+See `HiveMQExtension.java:41` for the internal interface definition.
+
+## Extension Deployment
+
+### Standalone Deployment
+
+1. Package your extension as a JAR file with dependencies
+2. Create the `hivemq-extension.xml` descriptor
+3. Place both files in a folder under `<hivemq>/extensions/<extension-id>/`
+4. HiveMQ will automatically load and start the extension
+
+Example structure:
+```
+hivemq/
+└── extensions/
+    └── my-extension/
+        ├── hivemq-extension.xml
+        └── my-extension-1.0.0.jar
+```
+
+### Embedded Deployment
+
+For programmatic deployment in embedded mode:
+
+```java
+import com.hivemq.embedded.EmbeddedExtension;
+import com.hivemq.embedded.EmbeddedHiveMQ;
+
+EmbeddedExtension extension = EmbeddedExtension.builder()
+    .withId("embedded-ext-1")
+    .withName("Embedded Extension")
+    .withVersion("1.0.0")
+    .withPriority(0)
+    .withStartPriority(1000)
+    .withAuthor("Me")
+    .withExtensionMain(new MyExtensionMain())
+    .build();
+
+EmbeddedHiveMQ hiveMQ = EmbeddedHiveMQ.builder()
+    .withEmbeddedExtension(extension)
+    .build();
+```
+
+See `README.adoc:233` for embedded extension examples.
+
+## Extension Services
+
+The Extension SDK provides access to HiveMQ services through the `ExtensionStartInput`:
+
+```java
+@Override
+public void extensionStart(
+        @NotNull ExtensionStartInput input,
+        @NotNull ExtensionStartOutput output) {
+    
+    // Get services
+    var services = input.getServices();
+    
+    // Client service - manage clients
+    var clientService = services.clientService();
+    
+    // Publish service - publish messages
+    var publishService = services.publishService();
+    
+    // Subscription service - manage subscriptions
+    var subscriptionService = services.subscriptionService();
+    
+    // Retained message service
+    var retainedMessageService = services.retainedMessageService();
+}
+```
+
+## Extension Priorities
+
+Extensions execute in priority order:
+
+- **Priority** (`priority` field) - Controls execution order for authenticators, authorizers, and interceptors
+  - Lower numbers execute first (e.g., priority 0 before priority 100)
+  - Default: 0
+  
+- **Start Priority** (`start-priority` field) - Controls extension startup order
+  - Higher numbers start first (e.g., 1000 before 0)
+  - Default: 1000
+
+See `HiveMQExtension.java:72-78` for priority interface methods.
+
+## Extension Examples
+
+### Allow-All Extension
+
+HiveMQ includes an allow-all extension for development:
+
+Location: `src/distribution/extensions/hivemq-allow-all-extension/`
+
+Configuration: `hivemq-allow-all-extension/hivemq-extension.xml:1`
+
+This extension allows all connections and operations without authentication.
+
+<Warning>
+The allow-all extension is for development only. Never use in production.
+</Warning>
+
+## Best Practices
+
+### Performance
+
+1. **Use Asynchronous Processing** - Avoid blocking operations in callbacks
+2. **Minimize Latency** - Keep authentication and authorization logic fast
+3. **Cache When Possible** - Cache credential lookups and authorization decisions
+4. **Use Thread Pools** - Leverage the managed executor service for background tasks
+
+### Security
+
+1. **Validate All Inputs** - Never trust client-provided data
+2. **Use Secure Credential Storage** - Never hardcode credentials
+3. **Implement Proper Error Handling** - Don't leak sensitive information in errors
+4. **Follow Least Privilege** - Grant minimum necessary permissions
+
+### Reliability
+
+1. **Handle Failures Gracefully** - Implement fallback behavior
+2. **Log Appropriately** - Use structured logging for debugging
+3. **Test Thoroughly** - Unit test and integration test extensions
+4. **Monitor Extension Health** - Track extension metrics and errors
+
+## Troubleshooting
+
+### Extension Not Loading
+
+- Verify `hivemq-extension.xml` is valid XML
+- Check extension ID matches folder name
+- Ensure JAR contains all dependencies
+- Review HiveMQ logs for classloading errors
+
+### Runtime Errors
+
+- Check for exceptions in HiveMQ logs
+- Verify SDK version compatibility
+- Review thread safety of shared state
+- Enable debug logging for extension system
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Extension SDK" icon="code" href="/extensions/extension-sdk">
+    Learn about the Extension SDK API and dependencies
+  </Card>
+  <Card title="Authentication" icon="lock" href="/extensions/authentication">
+    Implement custom authentication logic
+  </Card>
+  <Card title="Authorization" icon="shield" href="/extensions/authorization">
+    Control client permissions
+  </Card>
+  <Card title="Packet Interceptors" icon="filter" href="/extensions/packet-interceptors">
+    Intercept and modify MQTT packets
+  </Card>
+</CardGroup>

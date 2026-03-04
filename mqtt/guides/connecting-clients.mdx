@@ -1,0 +1,376 @@
+---
+title: 'Connecting MQTT Clients'
+description: 'Learn how to connect MQTT clients to HiveMQ Community Edition using Python, JavaScript, Java, and Mosquitto CLI'
+---
+
+## Overview
+
+Connecting clients to your MQTT broker is the first step in building IoT applications. This guide demonstrates how to establish connections to HiveMQ Community Edition using popular MQTT client libraries across different programming languages.
+
+<Note>
+HiveMQ Community Edition runs on port **1883** for standard MQTT and port **8883** for MQTT over TLS by default.
+</Note>
+
+## Connection Basics
+
+Every MQTT connection requires:
+- **Broker address**: The hostname or IP address of your HiveMQ broker
+- **Port**: 1883 (TCP) or 8883 (TLS)
+- **Client ID**: A unique identifier for the client (auto-generated if not specified)
+- **Clean Session**: Whether to persist session state (true/false)
+- **Credentials**: Username and password (optional, depending on configuration)
+
+## Client Examples
+
+### Python (Paho MQTT)
+
+The Eclipse Paho Python client is one of the most popular MQTT libraries.
+
+<CodeGroup>
+```python Basic Connection
+import paho.mqtt.client as mqtt
+
+def on_connect(client, userdata, flags, rc):
+    if rc == 0:
+        print("Connected successfully to HiveMQ")
+    else:
+        print(f"Connection failed with code {rc}")
+
+def on_disconnect(client, userdata, rc):
+    if rc != 0:
+        print("Unexpected disconnection")
+
+# Create client instance
+client = mqtt.Client(client_id="python_client_001")
+
+# Assign callbacks
+client.on_connect = on_connect
+client.on_disconnect = on_disconnect
+
+# Connect to HiveMQ
+client.connect("localhost", 1883, 60)
+
+# Start network loop
+client.loop_forever()
+```
+
+```python With Authentication
+import paho.mqtt.client as mqtt
+
+def on_connect(client, userdata, flags, rc):
+    if rc == 0:
+        print("Connected with authentication")
+    else:
+        print(f"Failed: {rc}")
+
+client = mqtt.Client(client_id="python_secure_client")
+
+# Set username and password
+client.username_pw_set(username="admin", password="hivemq")
+
+client.on_connect = on_connect
+client.connect("localhost", 1883, 60)
+client.loop_forever()
+```
+
+```python TLS Connection
+import paho.mqtt.client as mqtt
+import ssl
+
+def on_connect(client, userdata, flags, rc):
+    print(f"Secure connection established: {rc}")
+
+client = mqtt.Client(client_id="python_tls_client")
+
+# Configure TLS
+client.tls_set(
+    ca_certs="/path/to/ca.crt",
+    certfile="/path/to/client.crt",
+    keyfile="/path/to/client.key",
+    tls_version=ssl.PROTOCOL_TLSv1_2
+)
+
+client.username_pw_set(username="admin", password="hivemq")
+client.on_connect = on_connect
+
+# Connect via TLS port
+client.connect("localhost", 8883, 60)
+client.loop_forever()
+```
+</CodeGroup>
+
+<Tip>
+Install Paho MQTT with: `pip install paho-mqtt`
+</Tip>
+
+### JavaScript (MQTT.js)
+
+MQTT.js works in both Node.js and browser environments.
+
+<CodeGroup>
+```javascript Node.js Connection
+const mqtt = require('mqtt');
+
+const client = mqtt.connect('mqtt://localhost:1883', {
+  clientId: 'nodejs_client_001',
+  clean: true,
+  connectTimeout: 4000,
+  reconnectPeriod: 1000,
+});
+
+client.on('connect', () => {
+  console.log('Connected to HiveMQ');
+});
+
+client.on('error', (error) => {
+  console.error('Connection error:', error);
+});
+
+client.on('disconnect', () => {
+  console.log('Disconnected from broker');
+});
+```
+
+```javascript With Credentials
+const mqtt = require('mqtt');
+
+const options = {
+  clientId: 'nodejs_auth_client',
+  username: 'admin',
+  password: 'hivemq',
+  clean: true,
+  keepalive: 60,
+};
+
+const client = mqtt.connect('mqtt://localhost:1883', options);
+
+client.on('connect', () => {
+  console.log('Authenticated connection established');
+});
+```
+
+```javascript WebSocket Connection
+const mqtt = require('mqtt');
+
+// Connect via WebSocket
+const client = mqtt.connect('ws://localhost:8000/mqtt', {
+  clientId: 'websocket_client',
+  protocolVersion: 5, // MQTT 5.0
+});
+
+client.on('connect', () => {
+  console.log('Connected via WebSocket');
+});
+```
+</CodeGroup>
+
+<Tip>
+Install MQTT.js with: `npm install mqtt`
+</Tip>
+
+### Java (HiveMQ Client)
+
+The HiveMQ MQTT Client is a modern, high-performance Java library.
+
+<CodeGroup>
+```java Blocking Connection
+import com.hivemq.client.mqtt.mqtt3.Mqtt3BlockingClient;
+import com.hivemq.client.mqtt.mqtt3.Mqtt3Client;
+
+public class HiveMQConnect {
+    public static void main(String[] args) {
+        Mqtt3BlockingClient client = Mqtt3Client.builder()
+                .identifier("java_client_001")
+                .serverHost("localhost")
+                .serverPort(1883)
+                .buildBlocking();
+
+        client.connect();
+        System.out.println("Connected to HiveMQ");
+
+        // Keep application running
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            client.disconnect();
+            System.out.println("Disconnected");
+        }));
+    }
+}
+```
+
+```java Async Connection
+import com.hivemq.client.mqtt.mqtt5.Mqtt5AsyncClient;
+import com.hivemq.client.mqtt.mqtt5.Mqtt5Client;
+
+public class AsyncConnect {
+    public static void main(String[] args) {
+        Mqtt5AsyncClient client = Mqtt5Client.builder()
+                .identifier("java_async_client")
+                .serverHost("localhost")
+                .serverPort(1883)
+                .buildAsync();
+
+        client.connect()
+                .whenComplete((connAck, throwable) -> {
+                    if (throwable != null) {
+                        System.err.println("Connection failed: " + throwable.getMessage());
+                    } else {
+                        System.out.println("Connected successfully");
+                    }
+                });
+    }
+}
+```
+
+```java With Authentication
+import com.hivemq.client.mqtt.mqtt5.Mqtt5BlockingClient;
+import com.hivemq.client.mqtt.mqtt5.Mqtt5Client;
+import com.hivemq.client.mqtt.datatypes.MqttQos;
+
+public class SecureConnect {
+    public static void main(String[] args) {
+        Mqtt5BlockingClient client = Mqtt5Client.builder()
+                .identifier("java_secure_client")
+                .serverHost("localhost")
+                .serverPort(1883)
+                .simpleAuth()
+                    .username("admin")
+                    .password("hivemq".getBytes())
+                    .applySimpleAuth()
+                .buildBlocking();
+
+        client.connect();
+        System.out.println("Authenticated connection established");
+    }
+}
+```
+</CodeGroup>
+
+### Mosquitto CLI
+
+The Mosquitto command-line tools provide quick testing capabilities.
+
+<CodeGroup>
+```bash Subscribe
+# Basic subscribe
+mosquitto_sub -h localhost -p 1883 -t "sensors/#" -v
+
+# With authentication
+mosquitto_sub -h localhost -p 1883 -t "sensors/temp" -u admin -P hivemq
+
+# With client ID
+mosquitto_sub -h localhost -p 1883 -t "devices/+" -i "cli_subscriber" -v
+```
+
+```bash Publish
+# Basic publish
+mosquitto_pub -h localhost -p 1883 -t "sensors/temperature" -m "22.5"
+
+# With QoS and retain
+mosquitto_pub -h localhost -p 1883 -t "status/online" -m "true" -q 1 -r
+
+# From file
+mosquitto_pub -h localhost -p 1883 -t "data/payload" -f data.json
+```
+
+```bash TLS Connection
+# Subscribe with TLS
+mosquitto_sub -h localhost -p 8883 \
+  --cafile /path/to/ca.crt \
+  --cert /path/to/client.crt \
+  --key /path/to/client.key \
+  -t "secure/topic" -v
+```
+</CodeGroup>
+
+## Connection Parameters
+
+<Tabs>
+  <Tab title="Clean Session">
+    **Clean Session (MQTT 3.1.1)** or **Clean Start (MQTT 5.0)** determines session persistence:
+    
+    - `true`: Broker discards previous session state
+    - `false`: Broker stores subscriptions and queued messages
+    
+    ```python
+    # MQTT 3.1.1
+    client = mqtt.Client(clean_session=True)
+    
+    # MQTT 5.0
+    client = mqtt.Client(protocol=mqtt.MQTTv5, clean_start=True)
+    ```
+  </Tab>
+  
+  <Tab title="Keep Alive">
+    **Keep Alive** interval (in seconds) determines how often the client sends ping requests:
+    
+    ```python
+    # 60 second keep-alive
+    client.connect("localhost", 1883, keepalive=60)
+    ```
+    
+    The broker will disconnect clients that don't communicate within 1.5x the keep-alive period.
+  </Tab>
+  
+  <Tab title="Client ID">
+    **Client ID** must be unique per broker. If omitted, most libraries auto-generate one:
+    
+    ```javascript
+    // Auto-generated
+    const client = mqtt.connect('mqtt://localhost:1883');
+    
+    // Explicit
+    const client = mqtt.connect('mqtt://localhost:1883', {
+      clientId: 'my_unique_client'
+    });
+    ```
+  </Tab>
+</Tabs>
+
+## Connection Troubleshooting
+
+<Warning>
+Common connection issues:
+- **Connection refused**: Check if HiveMQ is running and the port is correct
+- **Authentication failed**: Verify username/password in HiveMQ configuration
+- **Timeout**: Check firewall rules and network connectivity
+- **Client ID already in use**: Ensure unique client IDs or enable clean session
+</Warning>
+
+### Verify Broker Status
+
+```bash
+# Check if HiveMQ is running
+docker ps | grep hivemq
+
+# Check broker logs
+docker logs hivemq-ce
+
+# Test connectivity
+telnet localhost 1883
+```
+
+## Best Practices
+
+1. **Use unique Client IDs**: Prevent unexpected disconnections
+2. **Implement reconnection logic**: Handle network interruptions gracefully
+3. **Set appropriate timeouts**: Balance responsiveness and network conditions
+4. **Handle connection callbacks**: Monitor connection state changes
+5. **Use TLS in production**: Encrypt data in transit
+6. **Configure keep-alive properly**: Optimize for your network latency
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Publishing & Subscribing" icon="paper-plane" href="/mqtt/guides/publishing-subscribing">
+    Learn how to exchange messages between clients
+  </Card>
+  <Card title="Quality of Service" icon="shield" href="/mqtt/guides/quality-of-service">
+    Understand QoS levels for reliable messaging
+  </Card>
+</CardGroup>
+
+## Related Resources
+
+- [MQTT Protocol Basics](/mqtt/overview)
+- [HiveMQ Installation](/installation)
+- [Security Configuration](/mqtt/transports/tls)

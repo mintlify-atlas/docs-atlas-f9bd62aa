@@ -1,0 +1,126 @@
+---
+title: Monitoring
+description: Monitor HiveMQ broker performance and health using JMX and metrics
+---
+
+# Monitoring
+
+HiveMQ Community Edition provides comprehensive monitoring capabilities through JMX (Java Management Extensions) and the Dropwizard Metrics library. This allows you to track broker performance, resource usage, and operational health in real-time.
+
+## JMX Monitoring
+
+### Enabling JMX
+
+JMX reporting is enabled by default in HiveMQ. The JMX reporter exposes all metrics through the JMX interface, allowing monitoring tools like JConsole, VisualVM, or commercial APM solutions to connect and retrieve metrics.
+
+**Default JMX Configuration:**
+- **Port:** 9010
+- **Authentication:** Disabled (for development)
+- **SSL:** Disabled (for development)
+- **Local Only:** False (accessible remotely)
+
+### JMX Configuration via Environment Variables
+
+You can configure JMX behavior using environment variables:
+
+```bash
+# Enable/disable JMX (default: true)
+export HIVEMQ_JMX_ENABLED=true
+
+# Set JMX port (default: 9010)
+export HIVEMQ_JMX_PORT=9010
+```
+
+### JMX Object Names
+
+HiveMQ uses the legacy Dropwizard Metrics object name format for backward compatibility:
+
+```
+metrics:name=<metric-name>
+```
+
+For example:
+- `metrics:name=com.hivemq.messages.incoming.total.count`
+- `metrics:name=com.hivemq.networking.connections.current`
+
+This format ensures compatibility with existing monitoring integrations.
+
+### Connecting to JMX
+
+**Using JConsole:**
+```bash
+jconsole localhost:9010
+```
+
+**Using VisualVM:**
+1. Add JMX Connection
+2. Host: `localhost`
+3. Port: `9010`
+4. No authentication required (default setup)
+
+<Warning>
+For production environments, it is strongly recommended to enable JMX authentication and SSL to secure access to monitoring data.
+</Warning>
+
+## Metrics Registry
+
+HiveMQ uses the Dropwizard Metrics library (Codahale Metrics) to collect and expose metrics. All metrics are registered in a central `MetricRegistry` that can be accessed via JMX or programmatically through extensions.
+
+### Metric Types
+
+HiveMQ uses two primary metric types:
+
+- **Counters:** Track cumulative counts of events (e.g., total messages received)
+- **Gauges:** Provide current snapshot values (e.g., current number of connections)
+
+## Monitoring Best Practices
+
+### Key Metrics to Monitor
+
+Prioritize monitoring these critical metrics:
+
+1. **Connection Metrics**
+   - Current connections
+   - Connection rate
+   - Closed connections
+
+2. **Message Metrics**
+   - Message throughput (incoming/outgoing)
+   - Dropped messages
+   - Queued messages
+
+3. **Resource Metrics**
+   - Memory usage (heap and persistence)
+   - Network I/O (bytes read/written)
+   - JVM statistics
+
+4. **Session Metrics**
+   - Active sessions
+   - Subscriptions
+   - Retained messages
+
+### Alerting Thresholds
+
+Set up alerts for:
+- High message drop rates
+- Memory persistence approaching limits
+- Connection failures or spikes
+- Non-writable connections (backpressure)
+
+### Integration with Monitoring Tools
+
+HiveMQ metrics can be integrated with:
+- **Prometheus** (via JMX Exporter)
+- **Grafana** (for visualization)
+- **Datadog, New Relic, AppDynamics** (via JMX)
+- **Nagios, Zabbix** (via JMX checks)
+
+## Diagnostic Mode
+
+For troubleshooting, HiveMQ can be started in diagnostic mode which provides enhanced logging and monitoring capabilities. See the [Diagnostics](/operations/diagnostics) page for details.
+
+## See Also
+
+- [Metrics Reference](/operations/metrics) - Complete list of available metrics
+- [Logging Configuration](/operations/logging) - Configure logging levels and output
+- [Diagnostics](/operations/diagnostics) - Troubleshooting tools and diagnostic mode

@@ -1,0 +1,144 @@
+---
+title: "Installation"
+description: "Add HiveMQ Community Edition Embedded Mode to your Java project"
+---
+
+Install HiveMQ Community Edition Embedded Mode by adding the dependency to your project's build configuration.
+
+## Requirements
+
+- **Java Version**: Java 11 or higher
+- **Build Tool**: Maven or Gradle
+- **Latest Version**: 2025.5
+
+<Note>
+You must set the compiler version to Java 11 or higher in your build configuration.
+</Note>
+
+## Maven Installation
+
+Add the following dependency to your `pom.xml` file:
+
+```xml pom.xml
+<project>
+    ...
+    <dependencies>
+        <dependency>
+            <groupId>com.hivemq</groupId>
+            <artifactId>hivemq-community-edition-embedded</artifactId>
+            <version>2025.5</version>
+        </dependency>
+    </dependencies>
+    ...
+</project>
+```
+
+### Compiler Configuration
+
+Ensure your Maven compiler plugin is set to Java 11 or higher:
+
+```xml pom.xml
+<build>
+    <plugins>
+        <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-compiler-plugin</artifactId>
+            <version>3.11.0</version>
+            <configuration>
+                <source>11</source>
+                <target>11</target>
+            </configuration>
+        </plugin>
+    </plugins>
+</build>
+```
+
+## Gradle Installation
+
+Add the following dependency to your `build.gradle` or `build.gradle.kts` file:
+
+<CodeGroup>
+
+```groovy build.gradle
+dependencies {
+    implementation 'com.hivemq:hivemq-community-edition-embedded:2025.5'
+}
+```
+
+```kotlin build.gradle.kts
+dependencies {
+    implementation("com.hivemq:hivemq-community-edition-embedded:2025.5")
+}
+```
+
+</CodeGroup>
+
+### Compiler Configuration
+
+Ensure your Gradle build is configured for Java 11 or higher:
+
+<CodeGroup>
+
+```groovy build.gradle
+java {
+    sourceCompatibility = JavaVersion.VERSION_11
+    targetCompatibility = JavaVersion.VERSION_11
+}
+```
+
+```kotlin build.gradle.kts
+java {
+    sourceCompatibility = JavaVersion.VERSION_11
+    targetCompatibility = JavaVersion.VERSION_11
+}
+```
+
+</CodeGroup>
+
+## Verify Installation
+
+Verify the installation by creating a simple test:
+
+```java
+import com.hivemq.embedded.EmbeddedHiveMQ;
+
+public class VerifyInstallation {
+    public static void main(String[] args) {
+        try (EmbeddedHiveMQ hivemq = EmbeddedHiveMQ.builder().build()) {
+            System.out.println("HiveMQ Embedded installed successfully!");
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+}
+```
+
+If the code compiles and runs without errors, the installation is successful.
+
+## Available Artifacts
+
+The embedded dependency is available from:
+
+- **Maven Central**: `com.hivemq:hivemq-community-edition-embedded`
+- **JitPack**: Alternative source for builds
+- **JavaDoc**: Available at [javadoc.io](https://javadoc.io/doc/com.hivemq/hivemq-community-edition-embedded)
+
+## Dependency Information
+
+The embedded artifact includes all necessary dependencies to run HiveMQ, including:
+
+- HiveMQ Core
+- Extension SDK
+- RocksDB for persistence (can be excluded if needed)
+- Logback for logging (can be excluded if using another logging framework)
+- Metrics library (Dropwizard Metrics)
+
+<Note>
+See the [Dependency Exclusions](/embedded/advanced/dependency-exclusions) guide if you need to exclude certain dependencies from your build.
+</Note>
+
+## Next Steps
+
+<Card title="Quick Start" icon="rocket" href="/embedded/quickstart">
+  Create your first embedded HiveMQ broker
+</Card>

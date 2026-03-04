@@ -1,0 +1,137 @@
+---
+title: Introduction to HiveMQ Community Edition
+description: Learn about HiveMQ CE, an open-source MQTT broker supporting MQTT 3.x and MQTT 5 protocols
+---
+
+## What is HiveMQ Community Edition?
+
+HiveMQ Community Edition (HiveMQ CE) is a Java-based open source MQTT broker that fully supports MQTT 3.x and MQTT 5. Licensed under Apache 2.0, it serves as the foundation of the HiveMQ enterprise-connectivity and messaging platform, implementing all MQTT features.
+
+HiveMQ CE powers many large-scale MQTT deployments worldwide and is now available as open source software, enabling developers to build reliable, scalable IoT and messaging applications.
+
+## Key Features
+
+HiveMQ CE provides comprehensive MQTT functionality out of the box:
+
+<CardGroup cols={2}>
+  <Card title="Full MQTT Support" icon="plug">
+    Complete implementation of MQTT 3.1, 3.1.1, and MQTT 5.0 specifications
+  </Card>
+  
+  <Card title="Multiple Transports" icon="network-wired">
+    MQTT over TCP, TLS, WebSocket, and Secure WebSocket
+  </Card>
+  
+  <Card title="Extension SDK" icon="puzzle-piece">
+    Java Extension SDK for authentication, authorization, and custom logic
+  </Card>
+  
+  <Card title="Cross-Platform" icon="laptop">
+    Runs on Windows, Linux, and macOS (Linux recommended for production)
+  </Card>
+</CardGroup>
+
+### Protocol Features
+
+- **Quality of Service (QoS) Levels**: Support for QoS 0, 1, and 2
+- **Retained Messages**: Store and deliver the last message on a topic
+- **Wildcard Subscriptions**: Subscribe to multiple topics with `+` and `#`
+- **Shared Subscriptions**: Load balance messages across multiple subscribers
+- **Topic Aliases**: Reduce bandwidth usage with MQTT 5 topic aliases
+- **Session Expiry**: Configurable session persistence
+- **Message Expiry**: Automatic cleanup of expired messages
+
+### Extensibility
+
+The Java Extension SDK enables you to:
+
+- Implement custom **authentication** mechanisms
+- Define fine-grained **authorization** rules
+- Initialize clients with **Client Initializers**
+- Intercept and modify **MQTT packets**
+- Interact with **publishes, retained messages, clients, and subscriptions**
+
+### Deployment Options
+
+<Tabs>
+  <Tab title="Standalone">
+    Download the binary package and run HiveMQ CE as a standalone broker using the provided startup scripts (`run.sh` or `run.bat`).
+  </Tab>
+  
+  <Tab title="Docker">
+    Deploy HiveMQ CE using the official Docker image from DockerHub:
+    
+    ```bash
+    docker run -d -p 1883:1883 hivemq/hivemq-ce
+    ```
+  </Tab>
+  
+  <Tab title="Embedded">
+    Embed HiveMQ CE directly into your Java application using the embedded mode API:
+    
+    ```java
+    EmbeddedHiveMQ hivemq = EmbeddedHiveMQ.builder()
+        .withConfigurationFolder(Path.of("/config"))
+        .build();
+    hivemq.start().join();
+    ```
+  </Tab>
+</Tabs>
+
+## Use Cases
+
+HiveMQ Community Edition is ideal for:
+
+- **IoT Applications**: Connect and manage IoT devices at scale
+- **Smart Home Systems**: Enable real-time communication between home automation devices
+- **Industrial IoT**: Monitor and control industrial equipment and sensors
+- **Mobile Applications**: Build responsive mobile apps with push notifications
+- **Microservices Communication**: Implement event-driven architectures
+- **Real-time Messaging**: Create chat applications and live data feeds
+- **Development & Testing**: Test MQTT clients and applications locally
+
+## System Requirements
+
+<Note>
+  **Java Version**: HiveMQ CE requires Java 11 or higher to run. For development and building from source, Java 21 or higher is required.
+</Note>
+
+To verify your Java installation:
+
+```bash
+java -version
+```
+
+### Resource Recommendations
+
+- **Memory**: Minimum 512 MB RAM (2 GB+ recommended for production)
+- **Storage**: At least 100 MB for installation, additional space for data persistence
+- **Network**: Ensure port 1883 (MQTT) is accessible through your firewall
+
+## MQTT Client Compatibility
+
+HiveMQ CE is compatible with all standard MQTT 3 and MQTT 5 clients, including:
+
+- Eclipse Paho (Java, Python, C, JavaScript, Go)
+- HiveMQ MQTT Client (Java)
+- MQTT.js (Node.js, Browser)
+- Mosquitto Client
+- MQTTnet (.NET)
+- And many more...
+
+## License
+
+HiveMQ Community Edition is licensed under the **Apache License, Version 2.0**. The source code is available on [GitHub](https://github.com/hivemq/hivemq-community-edition).
+
+## Getting Started
+
+Ready to start using HiveMQ CE? Check out our [Quickstart Guide](/quickstart) to get up and running in minutes, or dive into the [Installation Guide](/installation) for detailed setup instructions.
+
+## Community & Support
+
+- **Community Forum**: Get help and discuss HiveMQ CE at [community.hivemq.com](https://community.hivemq.com/)
+- **GitHub**: Report issues and contribute at [github.com/hivemq/hivemq-community-edition](https://github.com/hivemq/hivemq-community-edition)
+- **Documentation**: Explore the [HiveMQ CE Wiki](https://github.com/hivemq/hivemq-community-edition/wiki)
+- **MQTT Resources**: 
+  - [MQTT Essentials](https://www.hivemq.com/mqtt-essentials/)
+  - [MQTT 5 Essentials](https://www.hivemq.com/mqtt-5/)

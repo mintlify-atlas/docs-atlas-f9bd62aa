@@ -1,0 +1,186 @@
+---
+title: Persistence Settings
+description: Configure data persistence mode in HiveMQ Community Edition
+---
+
+HiveMQ can persist MQTT data either to disk or keep it in memory. The persistence mode determines how retained messages, queued messages, and client session data are stored.
+
+## Configuration Section
+
+Persistence is configured within the `<persistence>` element:
+
+```xml
+<hivemq>
+    <persistence>
+        <mode>file</mode>
+    </persistence>
+</hivemq>
+```
+
+## Persistence Modes
+
+HiveMQ Community Edition supports two persistence modes:
+
+### File-Based Persistence (Default)
+
+```xml
+<persistence>
+    <mode>file</mode>
+</persistence>
+```
+
+**Characteristics:**
+- Data is persisted to disk in the `data` directory
+- Survives HiveMQ restarts
+- Durable and reliable
+- Suitable for production environments
+- Slightly slower than in-memory mode
+
+**Default:** `file`
+
+### In-Memory Persistence
+
+```xml
+<persistence>
+    <mode>in-memory</mode>
+</persistence>
+```
+
+**Characteristics:**
+- All data is stored in RAM
+- Faster performance
+- Data is lost on HiveMQ restart
+- Suitable for testing and development
+- Not recommended for production
+
+## What Gets Persisted
+
+The following data is affected by the persistence mode:
+
+- **Client Sessions** - Session state for connected and disconnected clients
+- **Queued Messages** - QoS 1 and QoS 2 messages queued for delivery
+- **Retained Messages** - Messages published with the retain flag
+- **Subscriptions** - Client subscriptions
+- **Message Metadata** - Message expiry, publish timestamps, etc.
+
+## Data Directory
+
+When using file-based persistence, HiveMQ stores data in:
+
+```
+<HIVEMQ_HOME>/data/
+```
+
+This directory contains:
+- `persistence/` - Retained messages and client session data
+- `queued_messages/` - Messages queued for delivery
+
+## Performance Considerations
+
+### File-Based Persistence
+
+**Advantages:**
+- Data durability and reliability
+- Survives crashes and restarts
+- Suitable for production workloads
+
+**Considerations:**
+- Disk I/O can be a bottleneck
+- Requires sufficient disk space
+- SSD storage recommended for better performance
+
+### In-Memory Persistence
+
+**Advantages:**
+- Fastest performance
+- No disk I/O overhead
+- Ideal for testing and ephemeral workloads
+
+**Considerations:**
+- All data lost on restart
+- Limited by available RAM
+- Not suitable for production
+
+## Use Cases
+
+### File-Based Persistence
+
+Use file-based persistence for:
+- Production deployments
+- When data durability is required
+- Long-lived client sessions
+- Retained messages that must survive restarts
+
+### In-Memory Persistence
+
+Use in-memory persistence for:
+- Development and testing
+- Temporary or disposable data
+- High-performance scenarios where data loss is acceptable
+- Docker containers that don't need state
+
+## Configuration Examples
+
+### Production Configuration
+
+```xml
+<hivemq>
+    <persistence>
+        <mode>file</mode>
+    </persistence>
+</hivemq>
+```
+
+### Development/Testing Configuration
+
+```xml
+<hivemq>
+    <persistence>
+        <mode>in-memory</mode>
+    </persistence>
+</hivemq>
+```
+
+## Switching Persistence Modes
+
+When switching from file-based to in-memory persistence:
+1. Stop HiveMQ
+2. Update the configuration
+3. Optionally remove the `data` directory
+4. Start HiveMQ
+
+When switching from in-memory to file-based persistence:
+1. Stop HiveMQ
+2. Update the configuration
+3. Start HiveMQ (a new `data` directory will be created)
+
+**Warning:** All persisted data will be lost when switching modes.
+
+## Monitoring Persistence
+
+Monitor the following to ensure healthy persistence:
+
+### File-Based
+- Disk space usage in the `data` directory
+- Disk I/O metrics
+- Write latency
+
+### In-Memory
+- JVM heap usage
+- Garbage collection metrics
+- Available RAM
+
+## Best Practices
+
+1. **Use file-based persistence in production** for data durability
+2. **Use SSD storage** for better file-based persistence performance
+3. **Monitor disk space** when using file-based persistence
+4. **Allocate sufficient heap** when using in-memory persistence
+5. **Backup the data directory** regularly (file-based mode)
+6. **Test failover scenarios** to ensure your persistence configuration meets requirements
+
+## Related Configuration
+
+- [MQTT Settings](/configuration/mqtt-settings) - Configure message and session expiry
+- [Restrictions](/configuration/restrictions) - Limit the number of connections and data
+- [Listeners](/configuration/listeners) - Configure client connections

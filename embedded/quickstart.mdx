@@ -1,0 +1,282 @@
+---
+title: "Quick Start"
+description: "Get started with HiveMQ Community Edition Embedded Mode in minutes"
+---
+
+This guide shows you how to create, start, and stop an embedded HiveMQ broker in your Java application.
+
+## Basic Example
+
+The simplest way to create and start an embedded HiveMQ broker:
+
+```java
+import com.hivemq.embedded.EmbeddedHiveMQ;
+
+public class BasicExample {
+    public static void main(String[] args) {
+        try (EmbeddedHiveMQ hivemq = EmbeddedHiveMQ.builder().build()) {
+            hivemq.start().join();
+            System.out.println("HiveMQ started successfully!");
+            
+            // Your application logic here
+            // The broker is now running and ready to accept connections
+            
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+}
+```
+
+<Note>
+`EmbeddedHiveMQ` implements `AutoCloseable`, so using try-with-resources ensures proper cleanup when the broker shuts down.
+</Note>
+
+## Builder Pattern
+
+Entry into embedded mode is done with the `EmbeddedHiveMQBuilder`:
+
+```java
+import com.hivemq.embedded.EmbeddedHiveMQ;
+import com.hivemq.embedded.EmbeddedHiveMQBuilder;
+import java.nio.file.Path;
+
+public class BuilderExample {
+    public static void main(String[] args) {
+        EmbeddedHiveMQBuilder builder = EmbeddedHiveMQ.builder()
+            .withConfigurationFolder(Path.of("/path/to/config-folder"))
+            .withDataFolder(Path.of("/path/to/data-folder"))
+            .withExtensionsFolder(Path.of("/path/to/extensions-folder"));
+        
+        try (EmbeddedHiveMQ hivemq = builder.build()) {
+            hivemq.start().join();
+            // Broker is running
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+}
+```
+
+## Lifecycle Management
+
+### Starting the Broker
+
+The `start()` method returns a `CompletableFuture` that completes when HiveMQ is ready:
+
+```java
+try (EmbeddedHiveMQ hivemq = EmbeddedHiveMQ.builder().build()) {
+    hivemq.start().join(); // Blocks until started
+    System.out.println("Broker is ready to accept connections");
+}
+```
+
+For asynchronous startup:
+
+```java
+hivemq.start().thenRun(() -> {
+    System.out.println("Broker started!");
+});
+```
+
+### Stopping the Broker
+
+The `stop()` method gracefully shuts down the broker:
+
+```java
+try (EmbeddedHiveMQ hivemq = embeddedHiveMQBuilder.build()) {
+    hivemq.start().join();
+    
+    // Run for some time
+    Thread.sleep(60000);
+    
+    hivemq.stop().join(); // Graceful shutdown
+} catch (Exception e) {
+    e.printStackTrace();
+}
+```
+
+<Info>
+Both `start()` and `stop()` are idempotent. Calling them multiple times has no effect after the first call.
+</Info>
+
+### Restart Behavior
+
+A stopped `EmbeddedHiveMQ` can be restarted:
+
+```java
+try (EmbeddedHiveMQ hivemq = EmbeddedHiveMQ.builder().build()) {
+    // First start
+    hivemq.start().join();
+    
+    // Stop
+    hivemq.stop().join();
+    
+    // Restart
+    hivemq.start().join();
+    
+} catch (Exception e) {
+    e.printStackTrace();
+}
+```
+
+<Warning>
+If no enduring persistence type (such as file persistence) is configured, the restarted broker does not retain its state.
+</Warning>
+
+## Adding Extensions
+
+You can add extensions programmatically using the `EmbeddedExtension` API:
+
+```java
+import com.hivemq.embedded.EmbeddedExtension;
+import com.hivemq.embedded.EmbeddedHiveMQ;
+import com.hivemq.extension.sdk.api.ExtensionMain;
+import com.hivemq.extension.sdk.api.parameter.ExtensionStartInput;
+import com.hivemq.extension.sdk.api.parameter.ExtensionStartOutput;
+import com.hivemq.extension.sdk.api.parameter.ExtensionStopInput;
+import com.hivemq.extension.sdk.api.parameter.ExtensionStopOutput;
+import org.jetbrains.annotations.NotNull;
+
+public class ExtensionExample {
+    public static void main(String[] args) {
+        EmbeddedExtension extension = EmbeddedExtension.builder()
+            .withId("my-extension")
+            .withName("My Custom Extension")
+            .withVersion("1.0.0")
+            .withPriority(0)
+            .withStartPriority(1000)
+            .withAuthor("Your Name")
+            .withExtensionMain(new MyExtensionMain())
+            .build();
+        
+        try (EmbeddedHiveMQ hivemq = EmbeddedHiveMQ.builder()
+                .withEmbeddedExtension(extension)
+                .build()) {
+            
+            hivemq.start().join();
+            // Extension is now active
+            
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+    
+    private static class MyExtensionMain implements ExtensionMain {
+        @Override
+        public void extensionStart(
+                @NotNull ExtensionStartInput input,
+                @NotNull ExtensionStartOutput output) {
+            System.out.println("Extension started");
+        }
+        
+        @Override
+        public void extensionStop(
+                @NotNull ExtensionStopInput input,
+                @NotNull ExtensionStopOutput output) {
+            System.out.println("Extension stopped");
+        }
+    }
+}
+```
+
+## Accessing Metrics
+
+Access HiveMQ metrics through the `MetricRegistry`:
+
+```java
+import com.codahale.metrics.MetricRegistry;
+
+try (EmbeddedHiveMQ hivemq = EmbeddedHiveMQ.builder().build()) {
+    hivemq.start().join();
+    
+    MetricRegistry metrics = hivemq.getMetricRegistry();
+    
+    // Access specific metrics
+    metrics.getMetrics().forEach((name, metric) -> {
+        System.out.println(name + ": " + metric);
+    });
+}
+```
+
+<Note>
+The metric registry can be accessed before `EmbeddedHiveMQ` is started.
+</Note>
+
+## Complete Example
+
+Here's a complete example that demonstrates the key features:
+
+```java Main.java
+import com.hivemq.embedded.EmbeddedExtension;
+import com.hivemq.embedded.EmbeddedHiveMQ;
+import com.hivemq.extension.sdk.api.ExtensionMain;
+import com.hivemq.extension.sdk.api.parameter.ExtensionStartInput;
+import com.hivemq.extension.sdk.api.parameter.ExtensionStartOutput;
+import com.hivemq.extension.sdk.api.parameter.ExtensionStopInput;
+import com.hivemq.extension.sdk.api.parameter.ExtensionStopOutput;
+import org.jetbrains.annotations.NotNull;
+import java.nio.file.Path;
+
+public class Main {
+    public static void main(String[] args) {
+        // Create an embedded extension
+        EmbeddedExtension extension = EmbeddedExtension.builder()
+            .withId("embedded-ext-1")
+            .withName("Embedded Extension")
+            .withVersion("1.0.0")
+            .withPriority(0)
+            .withStartPriority(1000)
+            .withAuthor("Me")
+            .withExtensionMain(new MyEmbeddedExtensionMain())
+            .build();
+        
+        // Create and configure the broker
+        try (EmbeddedHiveMQ hivemq = EmbeddedHiveMQ.builder()
+                .withConfigurationFolder(Path.of("/path/to/config-folder"))
+                .withDataFolder(Path.of("/path/to/data-folder"))
+                .withExtensionsFolder(Path.of("/path/to/extensions-folder"))
+                .withEmbeddedExtension(extension)
+                .build()) {
+            
+            // Start the broker
+            hivemq.start().join();
+            System.out.println("HiveMQ is running");
+            
+            // Your application logic here
+            // ...
+            
+            // Stop is called automatically by try-with-resources
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+    
+    private static class MyEmbeddedExtensionMain implements ExtensionMain {
+        @Override
+        public void extensionStart(
+                @NotNull ExtensionStartInput input,
+                @NotNull ExtensionStartOutput output) {
+            System.out.println("Extension started");
+        }
+        
+        @Override
+        public void extensionStop(
+                @NotNull ExtensionStopInput input,
+                @NotNull ExtensionStopOutput output) {
+            System.out.println("Extension stopped");
+        }
+    }
+}
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="API Reference" icon="code" href="/embedded/api/embedded-hivemq">
+    Explore the complete API documentation
+  </Card>
+  <Card title="Configuration" icon="gear" href="/embedded/advanced/configuration">
+    Learn about advanced configuration options
+  </Card>
+</CardGroup>

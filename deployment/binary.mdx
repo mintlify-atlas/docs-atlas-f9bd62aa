@@ -1,0 +1,196 @@
+---
+title: Binary Package Deployment
+description: Download and run HiveMQ Community Edition using the binary package distribution
+---
+
+The binary package is the simplest way to deploy HiveMQ Community Edition. Download the pre-built package and run it directly on your system.
+
+## Prerequisites
+
+<Warning>
+  HiveMQ requires at least **Java 11** to run. Verify your Java installation before proceeding.
+</Warning>
+
+```bash
+java -version
+```
+
+The output should show Java version 11 or higher. If you don't have Java installed, download it from [Eclipse Temurin](https://adoptium.net/temurin/releases).
+
+## Download HiveMQ
+
+Download the latest HiveMQ Community Edition binary package from the [GitHub releases page](https://github.com/hivemq/hivemq-community-edition/releases).
+
+```bash
+wget https://github.com/hivemq/hivemq-community-edition/releases/download/2025.5/hivemq-ce-2025.5.zip
+```
+
+## Extract the Package
+
+Unzip the downloaded package:
+
+```bash
+unzip hivemq-ce-2025.5.zip
+cd hivemq-ce-2025.5
+```
+
+## Directory Structure
+
+The extracted HiveMQ package contains the following directories:
+
+```
+hivemq-ce-2025.5/
+├── bin/                    # Startup scripts and JARs
+│   ├── run.sh             # Linux/Unix/macOS startup script
+│   ├── run.bat            # Windows startup script
+│   ├── diagnostics.sh     # Diagnostics tool (Linux/Unix/macOS)
+│   ├── diagnostics.bat    # Diagnostics tool (Windows)
+│   └── hivemq.jar         # HiveMQ executable JAR
+├── conf/                   # Configuration files
+│   ├── config.xml         # Main configuration
+│   ├── config.xsd         # Configuration schema
+│   └── logback.xml        # Logging configuration
+├── data/                   # Persistent data storage
+├── extensions/             # Extension directory
+├── log/                    # Log files
+└── third-party-licenses/   # License information
+```
+
+## Starting HiveMQ
+
+<Tabs>
+  <Tab title="Linux/Unix/macOS">
+    Make the startup script executable and run it:
+
+    ```bash
+    chmod +x bin/run.sh
+    ./bin/run.sh
+    ```
+
+    Or use the shorthand:
+
+    ```bash
+    cd hivemq-ce-2025.5
+    bin/run.sh
+    ```
+  </Tab>
+  <Tab title="Windows">
+    Right-click on `bin\run.bat` and select **Run as administrator**.
+
+    Alternatively, from the command line:
+
+    ```cmd
+    cd hivemq-ce-2025.5
+    bin\run.bat
+    ```
+
+    <Note>
+      HiveMQ requires administrator privileges on Windows for optimal performance.
+    </Note>
+  </Tab>
+</Tabs>
+
+## Verify the Installation
+
+When HiveMQ starts successfully, you'll see the HiveMQ banner in the console:
+
+```
+-------------------------------------------------------------------------
+
+                  _    _  _              __  __   ____
+                 | |  | |(_)            |  \/  | / __ \
+                 | |__| | _ __   __ ___ | \  / || |  | |
+                 |  __  || |\ \ / // _ \| |\/| || |  | |
+                 | |  | || | \ V /|  __/| |  | || |__| |
+                 |_|  |_||_|  \_/  \___||_|  |_| \___\_\
+
+-------------------------------------------------------------------------
+
+  HiveMQ Start Script for Linux/Unix v1.14
+```
+
+HiveMQ is now running and ready to accept MQTT connections on:
+- **Port 1883**: MQTT over TCP
+- **Port 8000**: MQTT over WebSocket (if configured)
+
+## Environment Variables
+
+### HIVEMQ_HOME
+
+Defines the HiveMQ installation directory. If not set, it's automatically detected from the script location.
+
+```bash
+export HIVEMQ_HOME=/opt/hivemq
+```
+
+### JAVA_OPTS
+
+Customize JVM options:
+
+```bash
+export JAVA_OPTS="-Xmx4g -Xms4g"
+./bin/run.sh
+```
+
+### HIVEMQ_HEAPDUMP_FOLDER
+
+Specify where heap dumps are stored in case of OutOfMemoryError:
+
+```bash
+export HIVEMQ_HEAPDUMP_FOLDER=/var/log/hivemq
+```
+
+### JMX Monitoring
+
+JMX is enabled by default on port 9010. Customize with:
+
+```bash
+export HIVEMQ_JMX_ENABLED=true
+export HIVEMQ_JMX_PORT=9010
+```
+
+To disable JMX:
+
+```bash
+export HIVEMQ_JMX_ENABLED=false
+```
+
+## JVM Configuration
+
+The startup scripts configure the following JVM options automatically:
+
+- **IPv4 preference**: `-Djava.net.preferIPv4Stack=true`
+- **Module access**: Required `--add-opens` and `--add-exports` flags for Java 11+
+- **Randomness source**: Uses `/dev/urandom` for better entropy (Linux/Unix)
+- **Heap dumps**: Enabled on OutOfMemoryError
+- **Crash handling**: `-XX:+CrashOnOutOfMemoryError`
+- **Localization**: Set to `en_US`
+
+## Firewall Configuration
+
+<Warning>
+  Ensure port 1883 (MQTT) is accessible through your firewall if you want external devices to connect.
+</Warning>
+
+```bash
+# Example: Ubuntu/Debian firewall configuration
+sudo ufw allow 1883/tcp
+sudo ufw allow 8000/tcp  # If using WebSocket
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Configuration" icon="gear" href="/configuration/overview">
+    Configure listeners, security, and persistence settings
+  </Card>
+  <Card title="Extensions" icon="puzzle-piece" href="/extensions/overview">
+    Extend HiveMQ functionality with plugins
+  </Card>
+  <Card title="Monitoring" icon="chart-line" href="/operations/metrics">
+    Monitor HiveMQ with JMX and metrics
+  </Card>
+  <Card title="Docker Deployment" icon="docker" href="/deployment/docker">
+    Alternative deployment using Docker containers
+  </Card>
+</CardGroup>

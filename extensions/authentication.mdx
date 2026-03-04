@@ -1,0 +1,471 @@
+---
+title: "Authentication"
+description: "Implement custom authentication for MQTT clients using the HiveMQ Extension SDK"
+---
+
+## Overview
+
+Authentication extensions verify client identities when they connect to HiveMQ. The Extension SDK supports:
+
+- **Simple Authentication** - Username/password authentication for MQTT 3.x and 5.0
+- **Enhanced Authentication** - MQTT 5.0 challenge/response authentication (SASL)
+- **Multiple Authenticators** - Chain multiple authentication mechanisms
+- **Async Processing** - Non-blocking authentication for high performance
+
+## Authentication Flow
+
+1. Client sends CONNECT packet
+2. HiveMQ calls `AuthenticatorProvider.getAuthenticator()` for each extension (by priority)
+3. Authenticator validates credentials using `authenticate()` method
+4. Authentication result determines if client connects successfully
+
+See `PluginAuthenticatorService.java:40` for internal authentication service.
+
+## Implementing an Authenticator
+
+### Step 1: Create AuthenticatorProvider
+
+Register your authenticator in `extensionStart()`:
+
+```java
+import com.hivemq.extension.sdk.api.ExtensionMain;
+import com.hivemq.extension.sdk.api.annotations.NotNull;
+import com.hivemq.extension.sdk.api.parameter.*;
+import com.hivemq.extension.sdk.api.services.Services;
+import com.hivemq.extension.sdk.api.auth.parameter.AuthenticatorProviderInput;
+import com.hivemq.extension.sdk.api.auth.SimpleAuthenticator;
+import com.hivemq.extension.sdk.api.auth.Authenticator;
+
+public class MyAuthExtension implements ExtensionMain {
+    
+    @Override
+    public void extensionStart(
+            @NotNull ExtensionStartInput input,
+            @NotNull ExtensionStartOutput output) {
+        
+        Services services = input.getServices();
+        
+        // Register authenticator provider
+        services.authenticationService().setAuthenticatorProvider(
+            authenticatorProviderInput -> new MySimpleAuthenticator()
+        );
+    }
+    
+    @Override
+    public void extensionStop(
+            @NotNull ExtensionStopInput input,
+            @NotNull ExtensionStopOutput output) {
+        // Cleanup
+    }
+}
+```
+
+### Step 2: Implement SimpleAuthenticator
+
+```java
+import com.hivemq.extension.sdk.api.auth.SimpleAuthenticator;
+import com.hivemq.extension.sdk.api.auth.parameter.SimpleAuthInput;
+import com.hivemq.extension.sdk.api.auth.parameter.SimpleAuthOutput;
+import com.hivemq.extension.sdk.api.annotations.NotNull;
+import com.hivemq.extension.sdk.api.packets.connect.ConnectPacket;
+
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
+import java.util.Optional;
+
+public class MySimpleAuthenticator implements SimpleAuthenticator {
+    
+    @Override
+    public void authenticate(
+            @NotNull SimpleAuthInput input,
+            @NotNull SimpleAuthOutput output) {
+        
+        ConnectPacket connect = input.getConnectPacket();
+        
+        // Extract credentials
+        Optional<String> username = connect.getUserName();
+        Optional<ByteBuffer> password = connect.getPassword();
+        
+        if (!username.isPresent() || !password.isPresent()) {
+            output.failAuthentication("Username and password required");
+            return;
+        }
+        
+        String user = username.get();
+        String pass = StandardCharsets.UTF_8.decode(password.get()).toString();
+        
+        // Validate credentials
+        if (isValidCredentials(user, pass)) {
+            output.authenticateSuccessfully();
+        } else {
+            output.failAuthentication("Invalid credentials");
+        }
+    }
+    
+    private boolean isValidCredentials(String username, String password) {
+        // Check against database, LDAP, etc.
+        return "admin".equals(username) && "secret".equals(password);
+    }
+}
+```
+
+## Authentication Methods
+
+### Success
+
+Allow the client to connect:
+
+```java
+output.authenticateSuccessfully();
+```
+
+### Failure
+
+Reject the client connection:
+
+```java
+output.failAuthentication("Invalid credentials");
+```
+
+Optionally specify a reason code (MQTT 5.0):
+
+```java
+import com.hivemq.extension.sdk.api.packets.general.DisconnectReasonCode;
+
+output.failAuthentication(
+    DisconnectReasonCode.NOT_AUTHORIZED,
+    "Invalid API key"
+);
+```
+
+### Continue Authentication
+
+Delegate to the next authenticator in the chain:
+
+```java
+output.nextExtensionOrDefault();
+```
+
+Use this when:
+- Your authenticator doesn't apply to this client
+- You want to support multiple authentication methods
+- Falling back to default behavior
+
+## Async Authentication
+
+For non-blocking authentication (e.g., database or HTTP lookups):
+
+```java
+import com.hivemq.extension.sdk.api.async.Async;
+import com.hivemq.extension.sdk.api.async.TimeoutFallback;
+import java.time.Duration;
+
+public class AsyncAuthenticator implements SimpleAuthenticator {
+    
+    private final HttpClient httpClient;
+    
+    @Override
+    public void authenticate(
+            @NotNull SimpleAuthInput input,
+            @NotNull SimpleAuthOutput output) {
+        
+        // Enable async mode
+        Async<SimpleAuthOutput> async = output.async(
+            Duration.ofSeconds(5),
+            TimeoutFallback.FAILURE
+        );
+        
+        ConnectPacket connect = input.getConnectPacket();
+        String username = connect.getUserName().orElse("unknown");
+        
+        // Perform async authentication
+        httpClient.validateCredentialsAsync(username)
+            .thenAccept(valid -> {
+                if (valid) {
+                    async.resume().authenticateSuccessfully();
+                } else {
+                    async.resume().failAuthentication("Invalid credentials");
+                }
+            })
+            .exceptionally(error -> {
+                async.resume().failAuthentication("Authentication error: " + error.getMessage());
+                return null;
+            });
+    }
+}
+```
+
+**Timeout Fallback Options:**
+- `TimeoutFallback.FAILURE` - Fail authentication on timeout
+- `TimeoutFallback.SUCCESS` - Allow connection on timeout (use with caution)
+
+## Enhanced Authentication (MQTT 5.0)
+
+For challenge/response authentication using MQTT 5.0 AUTH packets:
+
+```java
+import com.hivemq.extension.sdk.api.auth.EnhancedAuthenticator;
+import com.hivemq.extension.sdk.api.auth.parameter.*;
+import com.hivemq.extension.sdk.api.packets.auth.ModifiableAuthPacket;
+
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
+
+public class SaslAuthenticator implements EnhancedAuthenticator {
+    
+    @Override
+    public void authenticate(
+            @NotNull EnhancedAuthInput input,
+            @NotNull EnhancedAuthOutput output) {
+        
+        ModifiableAuthPacket authPacket = output.getAuthPacket();
+        
+        // Extract authentication method
+        String method = authPacket.getAuthenticationMethod();
+        
+        if (!"SCRAM-SHA-256".equals(method)) {
+            output.failAuthentication("Unsupported auth method");
+            return;
+        }
+        
+        // Extract challenge data
+        ByteBuffer authData = authPacket.getAuthenticationData().orElse(null);
+        
+        if (authData == null) {
+            // First challenge
+            ByteBuffer challenge = generateChallenge();
+            output.continueAuthentication(challenge);
+        } else {
+            // Validate response
+            if (validateResponse(authData)) {
+                output.authenticateSuccessfully();
+            } else {
+                output.failAuthentication("Invalid response");
+            }
+        }
+    }
+    
+    private ByteBuffer generateChallenge() {
+        String challenge = "server-nonce-12345";
+        return ByteBuffer.wrap(challenge.getBytes(StandardCharsets.UTF_8));
+    }
+    
+    private boolean validateResponse(ByteBuffer response) {
+        // Validate SASL response
+        return true;
+    }
+}
+```
+
+### Enhanced Authentication Methods
+
+**Continue Authentication:**
+```java
+ByteBuffer challengeData = ByteBuffer.wrap("challenge".getBytes());
+output.continueAuthentication(challengeData);
+```
+
+**Success with Final Data:**
+```java
+ByteBuffer finalData = ByteBuffer.wrap("success".getBytes());
+output.authenticateSuccessfully(finalData);
+```
+
+## Client Information Access
+
+Access client and connection details during authentication:
+
+```java
+@Override
+public void authenticate(
+        @NotNull SimpleAuthInput input,
+        @NotNull SimpleAuthOutput output) {
+    
+    // Client identifier
+    String clientId = input.getClientInformation().getClientId();
+    
+    // Connection information
+    var connectionInfo = input.getConnectionInformation();
+    String remoteAddress = connectionInfo.getInetAddress()
+        .map(addr -> addr.getHostAddress())
+        .orElse("unknown");
+    
+    // CONNECT packet details
+    ConnectPacket connect = input.getConnectPacket();
+    int keepAlive = connect.getKeepAlive();
+    boolean cleanStart = connect.getCleanStart();
+    
+    // Authenticate based on client ID pattern
+    if (clientId.startsWith("sensor-")) {
+        output.authenticateSuccessfully();
+    } else {
+        output.nextExtensionOrDefault();
+    }
+}
+```
+
+## Database Authentication Example
+
+Authenticate against a database:
+
+```java
+import java.sql.*;
+
+public class DatabaseAuthenticator implements SimpleAuthenticator {
+    
+    private final String jdbcUrl;
+    private final String dbUser;
+    private final String dbPassword;
+    
+    public DatabaseAuthenticator(String jdbcUrl, String dbUser, String dbPassword) {
+        this.jdbcUrl = jdbcUrl;
+        this.dbUser = dbUser;
+        this.dbPassword = dbPassword;
+    }
+    
+    @Override
+    public void authenticate(
+            @NotNull SimpleAuthInput input,
+            @NotNull SimpleAuthOutput output) {
+        
+        ConnectPacket connect = input.getConnectPacket();
+        
+        String username = connect.getUserName().orElse(null);
+        ByteBuffer passwordBuf = connect.getPassword().orElse(null);
+        
+        if (username == null || passwordBuf == null) {
+            output.failAuthentication("Credentials required");
+            return;
+        }
+        
+        String password = StandardCharsets.UTF_8.decode(passwordBuf).toString();
+        
+        // Async database lookup
+        Async<SimpleAuthOutput> async = output.async(
+            Duration.ofSeconds(10),
+            TimeoutFallback.FAILURE
+        );
+        
+        CompletableFuture.supplyAsync(() -> validateInDatabase(username, password))
+            .thenAccept(valid -> {
+                if (valid) {
+                    async.resume().authenticateSuccessfully();
+                } else {
+                    async.resume().failAuthentication("Invalid credentials");
+                }
+            });
+    }
+    
+    private boolean validateInDatabase(String username, String password) {
+        String sql = "SELECT password_hash FROM users WHERE username = ?";
+        
+        try (Connection conn = DriverManager.getConnection(jdbcUrl, dbUser, dbPassword);
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            
+            stmt.setString(1, username);
+            ResultSet rs = stmt.executeQuery();
+            
+            if (rs.next()) {
+                String storedHash = rs.getString("password_hash");
+                return verifyPassword(password, storedHash);
+            }
+            return false;
+            
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
+    
+    private boolean verifyPassword(String password, String hash) {
+        // Use BCrypt, PBKDF2, etc.
+        return BCrypt.checkpw(password, hash);
+    }
+}
+```
+
+## Best Practices
+
+### Security
+
+1. **Never Log Passwords** - Avoid logging credentials in plain text
+2. **Use Secure Hashing** - Store password hashes (BCrypt, PBKDF2, Argon2)
+3. **Rate Limiting** - Implement rate limiting to prevent brute force attacks
+4. **Constant Time Comparison** - Use constant-time comparison for passwords
+5. **TLS Required** - Enforce TLS for credential transmission
+
+### Performance
+
+1. **Use Async Mode** - Always use async for I/O operations
+2. **Connection Pooling** - Pool database connections
+3. **Caching** - Cache authentication results when appropriate
+4. **Set Reasonable Timeouts** - Don't block client connections indefinitely
+
+### Error Handling
+
+1. **Fail Securely** - On errors, fail authentication rather than allowing access
+2. **Generic Error Messages** - Don't leak information in error messages
+3. **Log Authentication Failures** - Monitor failed authentication attempts
+4. **Handle Null Values** - Always check for missing credentials
+
+## Testing Authentication
+
+Test your authenticator with an MQTT client:
+
+```bash
+# Using mosquitto_pub
+mosquitto_pub -h localhost -p 1883 \
+  -u admin -P secret \
+  -t test/topic -m "Hello"
+
+# Using MQTT.js
+const mqtt = require('mqtt');
+const client = mqtt.connect('mqtt://localhost:1883', {
+  username: 'admin',
+  password: 'secret'
+});
+```
+
+## Troubleshooting
+
+### Authentication Always Fails
+
+- Check that `authenticateSuccessfully()` is called
+- Verify credentials are extracted correctly from CONNECT packet
+- Review HiveMQ logs for authentication errors
+- Ensure authenticator provider is registered in `extensionStart()`
+
+### Slow Authentication
+
+- Use async mode for I/O operations
+- Check database query performance
+- Review timeout settings
+- Monitor authentication latency metrics
+
+### Multiple Authenticators
+
+When multiple extensions provide authenticators:
+
+- Authenticators execute in extension priority order (lower priority number first)
+- Use `nextExtensionOrDefault()` to chain authenticators
+- First authenticator that returns success/failure wins
+- Default behavior applies if all authenticators call `nextExtensionOrDefault()`
+
+See `Authenticators.java:42` for authenticator registration.
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Authorization" icon="shield" href="/extensions/authorization">
+    Control client publish and subscribe permissions
+  </Card>
+  <Card title="Client Initializers" icon="play" href="/extensions/client-initializers">
+    Initialize client context after authentication
+  </Card>
+  <Card title="Extension SDK" icon="code" href="/extensions/extension-sdk">
+    Learn more about the Extension SDK API
+  </Card>
+  <Card title="Packet Interceptors" icon="filter" href="/extensions/packet-interceptors">
+    Intercept MQTT packets
+  </Card>
+</CardGroup>

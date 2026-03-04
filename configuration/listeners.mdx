@@ -1,0 +1,195 @@
+---
+title: Listeners
+description: Configure network listeners for MQTT clients to connect to HiveMQ
+---
+
+Listeners define the network interfaces and ports on which HiveMQ accepts client connections. HiveMQ supports multiple listener types to accommodate different protocols and security requirements.
+
+## Listener Types
+
+HiveMQ Community Edition supports four types of listeners:
+
+1. **TCP Listener** - Standard MQTT over TCP
+2. **TLS TCP Listener** - MQTT over TCP with TLS/SSL encryption
+3. **WebSocket Listener** - MQTT over WebSockets
+4. **TLS WebSocket Listener** - MQTT over WebSockets with TLS/SSL encryption
+
+## TCP Listener
+
+The basic TCP listener for unencrypted MQTT connections.
+
+### Configuration
+
+```xml
+<listeners>
+    <tcp-listener>
+        <port>1883</port>
+        <bind-address>0.0.0.0</bind-address>
+        <name>my-tcp-listener</name>
+    </tcp-listener>
+</listeners>
+```
+
+### Options
+
+| Option | Type | Required | Default | Description |
+|--------|------|----------|---------|-------------|
+| `port` | Integer (0-65535) | Yes | - | The port to listen on |
+| `bind-address` | String | No | `0.0.0.0` | The IP address to bind to |
+| `name` | String | No | - | A descriptive name for the listener |
+
+## TLS TCP Listener
+
+TCP listener with TLS/SSL encryption for secure MQTT connections.
+
+### Configuration
+
+```xml
+<listeners>
+    <tls-tcp-listener>
+        <port>8883</port>
+        <bind-address>0.0.0.0</bind-address>
+        <name>my-tls-listener</name>
+        <tls>
+            <keystore>
+                <path>/path/to/keystore.jks</path>
+                <password>keystore-password</password>
+                <private-key-password>key-password</private-key-password>
+            </keystore>
+            <client-authentication-mode>NONE</client-authentication-mode>
+        </tls>
+    </tls-tcp-listener>
+</listeners>
+```
+
+### TLS Options
+
+| Option | Type | Required | Default | Description |
+|--------|------|----------|---------|-------------|
+| `keystore.path` | String | Yes | - | Path to the Java keystore file |
+| `keystore.password` | String | Yes | - | Keystore password |
+| `keystore.private-key-password` | String | Yes | - | Private key password |
+| `truststore.path` | String | No | - | Path to the truststore file |
+| `truststore.password` | String | No | - | Truststore password |
+| `client-authentication-mode` | Enum | No | `NONE` | Client certificate authentication: `NONE`, `OPTIONAL`, `REQUIRED` |
+| `handshake-timeout` | Integer | No | `10000` | TLS handshake timeout in milliseconds |
+| `protocols` | List | No | JVM defaults | Enabled TLS protocols |
+| `cipher-suites` | List | No | JVM defaults | Enabled cipher suites |
+| `prefer-server-cipher-suites` | Boolean | No | - | Whether to prefer server cipher suites |
+
+### Client Authentication
+
+To require client certificates, configure a truststore and set the authentication mode:
+
+```xml
+<tls>
+    <keystore>
+        <path>/path/to/keystore.jks</path>
+        <password>keystore-password</password>
+        <private-key-password>key-password</private-key-password>
+    </keystore>
+    <truststore>
+        <path>/path/to/truststore.jks</path>
+        <password>truststore-password</password>
+    </truststore>
+    <client-authentication-mode>REQUIRED</client-authentication-mode>
+</tls>
+```
+
+## WebSocket Listener
+
+MQTT over WebSockets for browser-based clients.
+
+### Configuration
+
+```xml
+<listeners>
+    <websocket-listener>
+        <port>8000</port>
+        <bind-address>0.0.0.0</bind-address>
+        <path>/mqtt</path>
+        <name>my-websocket-listener</name>
+        <subprotocols>
+            <subprotocol>mqttv3.1</subprotocol>
+            <subprotocol>mqtt</subprotocol>
+        </subprotocols>
+        <allow-extensions>true</allow-extensions>
+    </websocket-listener>
+</listeners>
+```
+
+### Options
+
+| Option | Type | Required | Default | Description |
+|--------|------|----------|---------|-------------|
+| `port` | Integer (0-65535) | Yes | - | The port to listen on |
+| `bind-address` | String | No | `0.0.0.0` | The IP address to bind to |
+| `path` | String | No | `/mqtt` | The WebSocket endpoint path |
+| `name` | String | No | - | A descriptive name for the listener |
+| `subprotocols` | List | No | - | Allowed WebSocket subprotocols |
+| `allow-extensions` | Boolean | No | `false` | Whether to allow WebSocket extensions |
+
+## TLS WebSocket Listener
+
+WebSocket listener with TLS/SSL encryption.
+
+### Configuration
+
+```xml
+<listeners>
+    <tls-websocket-listener>
+        <port>8443</port>
+        <bind-address>0.0.0.0</bind-address>
+        <path>/mqtt</path>
+        <name>my-secure-websocket-listener</name>
+        <tls>
+            <keystore>
+                <path>/path/to/keystore.jks</path>
+                <password>keystore-password</password>
+                <private-key-password>key-password</private-key-password>
+            </keystore>
+        </tls>
+    </tls-websocket-listener>
+</listeners>
+```
+
+The TLS configuration options are the same as for TLS TCP listeners.
+
+## Multiple Listeners
+
+You can configure multiple listeners of different types:
+
+```xml
+<listeners>
+    <tcp-listener>
+        <port>1883</port>
+        <bind-address>0.0.0.0</bind-address>
+    </tcp-listener>
+    
+    <tls-tcp-listener>
+        <port>8883</port>
+        <bind-address>0.0.0.0</bind-address>
+        <tls>
+            <keystore>
+                <path>/path/to/keystore.jks</path>
+                <password>password</password>
+                <private-key-password>password</private-key-password>
+            </keystore>
+        </tls>
+    </tls-tcp-listener>
+    
+    <websocket-listener>
+        <port>8000</port>
+        <bind-address>0.0.0.0</bind-address>
+        <path>/mqtt</path>
+    </websocket-listener>
+</listeners>
+```
+
+## Best Practices
+
+- Use TLS listeners for production environments
+- Bind to specific IP addresses instead of `0.0.0.0` when possible
+- Use descriptive names for listeners to aid in debugging
+- Configure appropriate timeouts for your use case
+- Enable client authentication for enhanced security

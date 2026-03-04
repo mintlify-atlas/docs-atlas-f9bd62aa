@@ -1,0 +1,322 @@
+---
+title: "Secure WebSocket (WSS)"
+description: "Configure encrypted MQTT over Secure WebSocket with TLS"
+---
+
+## Overview
+
+Secure WebSocket (WSS) adds TLS encryption to WebSocket connections, protecting MQTT traffic in browser and web applications. The standard port is 443 (HTTPS) or a custom port like 8443.
+
+## Configuration
+
+### Basic Secure WebSocket Listener
+
+```xml config.xml
+<hivemq>
+  <listeners>
+    <tls-websocket-listener>
+      <port>8443</port>
+      <bind-address>0.0.0.0</bind-address>
+      <path>/mqtt</path>
+      <name>secure-websocket-listener</name>
+      <tls>
+        <keystore>
+          <path>/opt/hivemq/conf/keystore.jks</path>
+          <password>keystore-password</password>
+          <private-key-password>key-password</private-key-password>
+        </keystore>
+      </tls>
+    </tls-websocket-listener>
+  </listeners>
+</hivemq>
+```
+
+### With Client Certificate Authentication
+
+```xml
+<tls-websocket-listener>
+  <port>8443</port>
+  <bind-address>0.0.0.0</bind-address>
+  <path>/mqtt</path>
+  <tls>
+    <keystore>
+      <path>/opt/hivemq/conf/keystore.jks</path>
+      <password>keystore-password</password>
+      <private-key-password>key-password</private-key-password>
+    </keystore>
+    <truststore>
+      <path>/opt/hivemq/conf/truststore.jks</path>
+      <password>truststore-password</password>
+    </truststore>
+    <client-authentication-mode>REQUIRED</client-authentication-mode>
+    <protocols>
+      <protocol>TLSv1.2</protocol>
+      <protocol>TLSv1.3</protocol>
+    </protocols>
+  </tls>
+</tls-websocket-listener>
+```
+
+## Browser Client Example
+
+### MQTT.js with WSS
+
+```html
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Secure MQTT WebSocket</title>
+  <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+</head>
+<body>
+  <h1>Secure MQTT WebSocket Client</h1>
+  <div id="status">Disconnected</div>
+  <div id="messages"></div>
+  
+  <script>
+    // Connect via Secure WebSocket (WSS)
+    const client = mqtt.connect('wss://broker.example.com:8443/mqtt', {
+      clientId: 'web_secure_' + Math.random().toString(16).substr(2, 8),
+      username: 'user',
+      password: 'pass',
+      keepalive: 60,
+      clean: true,
+      reconnectPeriod: 5000
+    });
+    
+    client.on('connect', () => {
+      document.getElementById('status').innerHTML = 'Connected (Secure)';
+      client.subscribe('secure/messages', { qos: 1 });
+    });
+    
+    client.on('message', (topic, message) => {
+      const msg = message.toString();
+      const div = document.getElementById('messages');
+      div.innerHTML += `<p>${topic}: ${msg}</p>`;
+    });
+    
+    client.on('error', (error) => {
+      console.error('Error:', error);
+      document.getElementById('status').innerHTML = 'Error';
+    });
+  </script>
+</body>
+</html>
+```
+
+### Node.js with WSS
+
+```javascript
+const mqtt = require('mqtt');
+const fs = require('fs');
+
+// With CA certificate
+const client = mqtt.connect('wss://broker.example.com:8443/mqtt', {
+  clientId: 'nodejs_secure_client',
+  ca: fs.readFileSync('/path/to/ca.crt'),
+  rejectUnauthorized: true
+});
+
+client.on('connect', () => {
+  console.log('Connected securely via WSS');
+});
+```
+
+### With Client Certificate
+
+```javascript
+const client = mqtt.connect('wss://broker.example.com:8443/mqtt', {
+  clientId: 'nodejs_mutual_tls',
+  ca: fs.readFileSync('/path/to/ca.crt'),
+  cert: fs.readFileSync('/path/to/client.crt'),
+  key: fs.readFileSync('/path/to/client.key'),
+  rejectUnauthorized: true
+});
+```
+
+## Using Port 443 (HTTPS)
+
+For better firewall compatibility, run WSS on port 443:
+
+```xml
+<tls-websocket-listener>
+  <port>443</port>
+  <bind-address>0.0.0.0</bind-address>
+  <path>/mqtt</path>
+  <tls>
+    <keystore>
+      <path>/opt/hivemq/conf/keystore.jks</path>
+      <password>keystore-password</password>
+      <private-key-password>key-password</private-key-password>
+    </keystore>
+  </tls>
+</tls-websocket-listener>
+```
+
+<Note>
+  Running on port 443 may require root privileges or port forwarding. In Docker, map host port 443 to container port 8443.
+</Note>
+
+## Docker Configuration
+
+```bash
+# Map to standard HTTPS port
+docker run -d --name hivemq-ce \
+  -p 1883:1883 \
+  -p 443:8443 \
+  -v /path/to/keystore.jks:/opt/hivemq/conf/keystore.jks \
+  hivemq/hivemq-ce
+```
+
+## Let's Encrypt with WSS
+
+### Generate Keystore from Let's Encrypt
+
+```bash
+# Convert Let's Encrypt certificates to PKCS12
+openssl pkcs12 -export \
+  -in /etc/letsencrypt/live/broker.example.com/fullchain.pem \
+  -inkey /etc/letsencrypt/live/broker.example.com/privkey.pem \
+  -out keystore.p12 \
+  -name hivemq \
+  -passout pass:changeit
+
+# Convert PKCS12 to JKS
+keytool -importkeystore \
+  -srckeystore keystore.p12 -srcstoretype PKCS12 -srcstorepass changeit \
+  -destkeystore keystore.jks -deststoretype JKS -deststorepass changeit
+```
+
+### Auto-Renewal Script
+
+```bash
+#!/bin/bash
+# renew-cert.sh
+
+certbot renew
+
+# Convert to JKS
+openssl pkcs12 -export \
+  -in /etc/letsencrypt/live/broker.example.com/fullchain.pem \
+  -inkey /etc/letsencrypt/live/broker.example.com/privkey.pem \
+  -out /opt/hivemq/conf/keystore.p12 \
+  -name hivemq -passout pass:changeit
+
+keytool -importkeystore \
+  -srckeystore /opt/hivemq/conf/keystore.p12 -srcstoretype PKCS12 -srcstorepass changeit \
+  -destkeystore /opt/hivemq/conf/keystore.jks -deststoretype JKS -deststorepass changeit -noprompt
+
+# Restart HiveMQ
+systemctl restart hivemq
+```
+
+## Reverse Proxy Setup
+
+### Nginx as WSS Proxy
+
+```nginx
+server {
+    listen 443 ssl;
+    server_name broker.example.com;
+    
+    ssl_certificate /etc/letsencrypt/live/broker.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/broker.example.com/privkey.pem;
+    
+    location /mqtt {
+        proxy_pass http://localhost:8000/mqtt;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "Upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+Then clients connect to:
+```javascript
+const client = mqtt.connect('wss://broker.example.com/mqtt');
+```
+
+## Firewall Configuration
+
+```bash
+# Open WSS port (8443)
+sudo firewall-cmd --permanent --add-port=8443/tcp
+sudo firewall-cmd --reload
+
+# Or for port 443
+sudo firewall-cmd --permanent --add-service=https
+sudo firewall-cmd --reload
+```
+
+## Security Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Valid Certificates" icon="certificate">
+    Use certificates from trusted CA for production
+  </Card>
+  <Card title="TLS 1.2+" icon="shield">
+    Disable TLS 1.0 and 1.1
+  </Card>
+  <Card title="Strong Ciphers" icon="lock">
+    Configure modern cipher suites
+  </Card>
+  <Card title="Certificate Monitoring" icon="bell">
+    Set expiration alerts
+  </Card>
+</CardGroup>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Certificate errors in browser">
+    - Ensure certificate is issued by trusted CA
+    - Verify certificate matches domain name
+    - Check certificate has not expired
+    - For self-signed certs, add exception in browser
+  </Accordion>
+  
+  <Accordion title="WebSocket upgrade failed">
+    - Check TLS configuration is valid
+    - Verify keystore password is correct
+    - Ensure certificate file exists and is readable
+  </Accordion>
+  
+  <Accordion title="Connection timeout">
+    - Verify port 8443 or 443 is open
+    - Check firewall rules
+    - Test with openssl: `openssl s_client -connect broker.example.com:8443`
+  </Accordion>
+</AccordionGroup>
+
+## Testing WSS Connection
+
+```bash
+# Test TLS handshake
+openssl s_client -connect broker.example.com:8443 -servername broker.example.com
+
+# Test with curl (WebSocket upgrade)
+curl -i -N -H "Connection: Upgrade" -H "Upgrade: websocket" \
+  -H "Sec-WebSocket-Version: 13" -H "Sec-WebSocket-Key: test" \
+  https://broker.example.com:8443/mqtt
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="WebSocket (HTTP)" icon="globe" href="/mqtt/transports/websocket">
+    Unencrypted WebSocket transport
+  </Card>
+  <Card title="TLS TCP" icon="lock" href="/mqtt/transports/tls">
+    MQTT over TLS
+  </Card>
+  <Card title="Security Config" icon="shield" href="/configuration/security">
+    Additional security settings
+  </Card>
+  <Card title="Client Guide" icon="plug" href="/mqtt/guides/connecting-clients">
+    More connection examples
+  </Card>
+</CardGroup>

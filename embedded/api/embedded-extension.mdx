@@ -1,0 +1,411 @@
+---
+title: "EmbeddedExtension"
+description: "API reference for the EmbeddedExtension interface"
+---
+
+The `EmbeddedExtension` interface represents a programmatically-defined HiveMQ extension that can be added to an embedded HiveMQ instance.
+
+## Package
+
+```java
+com.hivemq.embedded.EmbeddedExtension
+```
+
+## Interface Declaration
+
+```java
+public interface EmbeddedExtension
+```
+
+**Since:** CE 2020.5
+
+## Methods
+
+### builder()
+
+Creates a new `EmbeddedExtensionBuilder` instance.
+
+```java
+static @NotNull EmbeddedExtensionBuilder builder()
+```
+
+**Returns:**
+- `EmbeddedExtensionBuilder` - A new builder instance for creating an `EmbeddedExtension`
+
+**Example:**
+
+```java
+EmbeddedExtensionBuilder builder = EmbeddedExtension.builder();
+```
+
+---
+
+### getId()
+
+Returns the unique identifier of the extension.
+
+```java
+@NotNull String getId()
+```
+
+**Returns:**
+- `String` - The unique ID of the extension
+
+**Example:**
+
+```java
+EmbeddedExtension extension = EmbeddedExtension.builder()
+    .withId("my-extension")
+    .withName("My Extension")
+    .withVersion("1.0.0")
+    .withExtensionMain(new MyExtensionMain())
+    .build();
+
+String id = extension.getId(); // "my-extension"
+```
+
+---
+
+### getName()
+
+Returns the human-readable name of the extension.
+
+```java
+@NotNull String getName()
+```
+
+**Returns:**
+- `String` - The name of the extension
+
+**Example:**
+
+```java
+String name = extension.getName(); // "My Extension"
+```
+
+---
+
+### getVersion()
+
+Returns the version of the extension.
+
+```java
+@NotNull String getVersion()
+```
+
+**Returns:**
+- `String` - The version of the extension
+
+**Example:**
+
+```java
+String version = extension.getVersion(); // "1.0.0"
+```
+
+---
+
+### getAuthor()
+
+Returns the author of the extension.
+
+```java
+@Nullable String getAuthor()
+```
+
+**Returns:**
+- `String` - The author of the extension, or `null` if not provided
+
+**Example:**
+
+```java
+String author = extension.getAuthor(); // "HiveMQ" or null
+```
+
+---
+
+### getPriority()
+
+Returns the extension's execution priority.
+
+```java
+int getPriority()
+```
+
+**Returns:**
+- `int` - The priority value. Extensions are called in order from highest to lowest priority.
+
+**Behavior:**
+- All extensions are called in the order of their priority (highest to lowest).
+- Default value: `0`
+
+**Example:**
+
+```java
+int priority = extension.getPriority(); // 0
+```
+
+---
+
+### getStartPriority()
+
+Returns the extension's start priority.
+
+```java
+int getStartPriority()
+```
+
+**Returns:**
+- `int` - The start priority value. Extensions are started in order from highest to lowest priority.
+
+**Behavior:**
+- All extensions are started in the order of their start priority (highest to lowest).
+- Default value: `1000`
+
+**Example:**
+
+```java
+int startPriority = extension.getStartPriority(); // 1000
+```
+
+---
+
+### getExtensionMain()
+
+Returns the extension's main class instance.
+
+```java
+@NotNull ExtensionMain getExtensionMain()
+```
+
+**Returns:**
+- `ExtensionMain` - The extension main class that implements `extensionStart()` and `extensionStop()`
+
+**Example:**
+
+```java
+ExtensionMain main = extension.getExtensionMain();
+```
+
+## Usage Examples
+
+### Basic Extension
+
+```java
+import com.hivemq.embedded.EmbeddedExtension;
+import com.hivemq.extension.sdk.api.ExtensionMain;
+import com.hivemq.extension.sdk.api.parameter.ExtensionStartInput;
+import com.hivemq.extension.sdk.api.parameter.ExtensionStartOutput;
+import com.hivemq.extension.sdk.api.parameter.ExtensionStopInput;
+import com.hivemq.extension.sdk.api.parameter.ExtensionStopOutput;
+import org.jetbrains.annotations.NotNull;
+
+public class BasicExtensionExample {
+    public static void main(String[] args) {
+        EmbeddedExtension extension = EmbeddedExtension.builder()
+            .withId("basic-extension")
+            .withName("Basic Extension")
+            .withVersion("1.0.0")
+            .withExtensionMain(new BasicExtensionMain())
+            .build();
+        
+        // Access extension properties
+        System.out.println("ID: " + extension.getId());
+        System.out.println("Name: " + extension.getName());
+        System.out.println("Version: " + extension.getVersion());
+    }
+    
+    private static class BasicExtensionMain implements ExtensionMain {
+        @Override
+        public void extensionStart(
+                @NotNull ExtensionStartInput input,
+                @NotNull ExtensionStartOutput output) {
+            System.out.println("Extension started");
+        }
+        
+        @Override
+        public void extensionStop(
+                @NotNull ExtensionStopInput input,
+                @NotNull ExtensionStopOutput output) {
+            System.out.println("Extension stopped");
+        }
+    }
+}
+```
+
+### Extension with Priorities
+
+```java
+import com.hivemq.embedded.EmbeddedExtension;
+import com.hivemq.extension.sdk.api.ExtensionMain;
+import com.hivemq.extension.sdk.api.parameter.ExtensionStartInput;
+import com.hivemq.extension.sdk.api.parameter.ExtensionStartOutput;
+import com.hivemq.extension.sdk.api.parameter.ExtensionStopInput;
+import com.hivemq.extension.sdk.api.parameter.ExtensionStopOutput;
+import org.jetbrains.annotations.NotNull;
+
+public class PriorityExtensionExample {
+    public static void main(String[] args) {
+        EmbeddedExtension highPriorityExtension = EmbeddedExtension.builder()
+            .withId("high-priority-ext")
+            .withName("High Priority Extension")
+            .withVersion("1.0.0")
+            .withPriority(100)          // Runs first
+            .withStartPriority(2000)     // Starts first
+            .withAuthor("HiveMQ")
+            .withExtensionMain(new MyExtensionMain())
+            .build();
+        
+        System.out.println("Priority: " + highPriorityExtension.getPriority());
+        System.out.println("Start Priority: " + highPriorityExtension.getStartPriority());
+    }
+    
+    private static class MyExtensionMain implements ExtensionMain {
+        @Override
+        public void extensionStart(
+                @NotNull ExtensionStartInput input,
+                @NotNull ExtensionStartOutput output) {
+            System.out.println("High priority extension started");
+        }
+        
+        @Override
+        public void extensionStop(
+                @NotNull ExtensionStopInput input,
+                @NotNull ExtensionStopOutput output) {
+            System.out.println("High priority extension stopped");
+        }
+    }
+}
+```
+
+### Complete Extension with HiveMQ
+
+```java
+import com.hivemq.embedded.EmbeddedExtension;
+import com.hivemq.embedded.EmbeddedHiveMQ;
+import com.hivemq.extension.sdk.api.ExtensionMain;
+import com.hivemq.extension.sdk.api.parameter.ExtensionStartInput;
+import com.hivemq.extension.sdk.api.parameter.ExtensionStartOutput;
+import com.hivemq.extension.sdk.api.parameter.ExtensionStopInput;
+import com.hivemq.extension.sdk.api.parameter.ExtensionStopOutput;
+import com.hivemq.extension.sdk.api.services.Services;
+import org.jetbrains.annotations.NotNull;
+
+public class CompleteExample {
+    public static void main(String[] args) {
+        EmbeddedExtension extension = EmbeddedExtension.builder()
+            .withId("logging-extension")
+            .withName("Connection Logging Extension")
+            .withVersion("1.0.0")
+            .withPriority(0)
+            .withStartPriority(1000)
+            .withAuthor("Your Company")
+            .withExtensionMain(new LoggingExtensionMain())
+            .build();
+        
+        try (EmbeddedHiveMQ hivemq = EmbeddedHiveMQ.builder()
+                .withEmbeddedExtension(extension)
+                .build()) {
+            
+            hivemq.start().join();
+            System.out.println("HiveMQ running with extension: " + extension.getName());
+            
+            Thread.sleep(60000); // Run for 1 minute
+            
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+    
+    private static class LoggingExtensionMain implements ExtensionMain {
+        @Override
+        public void extensionStart(
+                @NotNull ExtensionStartInput input,
+                @NotNull ExtensionStartOutput output) {
+            
+            // Register client lifecycle callbacks
+            Services.eventRegistry().setClientLifecycleEventListener(
+                eventListenerInput -> {
+                    eventListenerInput.getClientEventListeners()
+                        .addConnectEventListener(context -> {
+                            System.out.println("Client connected: " + 
+                                context.getClientInformation().getClientId());
+                        })
+                        .addDisconnectEventListener(context -> {
+                            System.out.println("Client disconnected: " + 
+                                context.getClientInformation().getClientId());
+                        });
+                });
+            
+            System.out.println("Logging extension started successfully");
+        }
+        
+        @Override
+        public void extensionStop(
+                @NotNull ExtensionStopInput input,
+                @NotNull ExtensionStopOutput output) {
+            System.out.println("Logging extension stopped");
+        }
+    }
+}
+```
+
+### Accessing Extension Information
+
+```java
+import com.hivemq.embedded.EmbeddedExtension;
+import com.hivemq.extension.sdk.api.ExtensionMain;
+import com.hivemq.extension.sdk.api.parameter.ExtensionStartInput;
+import com.hivemq.extension.sdk.api.parameter.ExtensionStartOutput;
+import com.hivemq.extension.sdk.api.parameter.ExtensionStopInput;
+import com.hivemq.extension.sdk.api.parameter.ExtensionStopOutput;
+import org.jetbrains.annotations.NotNull;
+
+public class ExtensionInfoExample {
+    public static void main(String[] args) {
+        EmbeddedExtension extension = EmbeddedExtension.builder()
+            .withId("info-extension")
+            .withName("Information Extension")
+            .withVersion("2.1.0")
+            .withAuthor("John Doe")
+            .withPriority(50)
+            .withStartPriority(1500)
+            .withExtensionMain(new InfoExtensionMain())
+            .build();
+        
+        printExtensionInfo(extension);
+    }
+    
+    private static void printExtensionInfo(EmbeddedExtension extension) {
+        System.out.println("===== Extension Information =====");
+        System.out.println("ID: " + extension.getId());
+        System.out.println("Name: " + extension.getName());
+        System.out.println("Version: " + extension.getVersion());
+        System.out.println("Author: " + extension.getAuthor());
+        System.out.println("Priority: " + extension.getPriority());
+        System.out.println("Start Priority: " + extension.getStartPriority());
+        System.out.println("=================================");
+    }
+    
+    private static class InfoExtensionMain implements ExtensionMain {
+        @Override
+        public void extensionStart(
+                @NotNull ExtensionStartInput input,
+                @NotNull ExtensionStartOutput output) {
+            // Extension logic here
+        }
+        
+        @Override
+        public void extensionStop(
+                @NotNull ExtensionStopInput input,
+                @NotNull ExtensionStopOutput output) {
+            // Cleanup logic here
+        }
+    }
+}
+```
+
+## See Also
+
+- [EmbeddedExtensionBuilder](/embedded/api/embedded-extension-builder) - Builder for creating extensions
+- [EmbeddedHiveMQBuilder](/embedded/api/embedded-hivemq-builder) - Add extensions to HiveMQ
+- [HiveMQ Extension SDK](https://www.hivemq.com/docs/extension-sdk/) - Extension development guide

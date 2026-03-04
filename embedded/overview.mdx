@@ -1,0 +1,72 @@
+---
+title: "Embedded Mode Overview"
+description: "Learn about HiveMQ Community Edition Embedded Mode and how to integrate MQTT broker functionality directly into your Java applications"
+---
+
+HiveMQ Community Edition offers an embedded mode that allows you to integrate a fully-functional MQTT broker directly into your Java/Java EE applications. This enables you to run HiveMQ programmatically within your application's process.
+
+## What is Embedded Mode?
+
+Embedded Mode provides a programmatic API for running HiveMQ CE as part of your Java application, rather than as a standalone process. This is ideal for:
+
+- Integration testing of MQTT-based applications
+- Building IoT gateways with embedded broker functionality
+- Creating custom MQTT solutions with tight application integration
+- Microservices that need built-in MQTT capabilities
+
+## Key Features
+
+- **Full MQTT Support**: All MQTT 3.1, 3.1.1, and MQTT 5.0 features are available
+- **Programmatic Configuration**: Configure HiveMQ using Java APIs
+- **Extension Support**: Add custom extensions programmatically without file-based deployment
+- **Lifecycle Management**: Start, stop, and restart the broker programmatically
+- **Metrics Access**: Direct access to HiveMQ's metric registry
+- **Resource Management**: Implements `AutoCloseable` for proper resource handling
+
+## Requirements
+
+- **Java Version**: Java 11 or higher
+- **Maven Central**: Available as a Maven/Gradle dependency
+- **License**: Apache License Version 2.0
+
+## Core Components
+
+Embedded Mode is built around four main classes:
+
+- **`EmbeddedHiveMQ`**: The main broker instance
+- **`EmbeddedHiveMQBuilder`**: Builder for creating and configuring the broker
+- **`EmbeddedExtension`**: Represents a programmatically-defined extension
+- **`EmbeddedExtensionBuilder`**: Builder for creating extensions
+
+## When to Use Embedded Mode
+
+**Use Embedded Mode when:**
+- You need tight integration between your application and the MQTT broker
+- You want to programmatically control the broker lifecycle
+- You're building integration tests for MQTT functionality
+- You need to embed MQTT capabilities in a larger application
+
+**Use Standalone Mode when:**
+- You need a production MQTT broker running as a separate service
+- You want to use HiveMQ's standard deployment model
+- You need to manage the broker independently of your application
+
+## Architecture
+
+When running in embedded mode, HiveMQ runs in the same JVM process as your application. This means:
+
+- **Shared Resources**: The broker shares memory and CPU with your application
+- **Same Thread Pool**: Both run in the same JVM process
+- **Direct Access**: No network overhead when your application publishes/subscribes locally
+- **Lifecycle Coupling**: The broker's lifecycle is managed by your application
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Installation" icon="download" href="/embedded/installation">
+    Add the embedded dependency to your project
+  </Card>
+  <Card title="Quick Start" icon="rocket" href="/embedded/quickstart">
+    Get started with your first embedded broker
+  </Card>
+</CardGroup>

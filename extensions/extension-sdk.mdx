@@ -1,0 +1,527 @@
+---
+title: "Extension SDK"
+description: "HiveMQ Extension SDK API reference and development guide"
+---
+
+## Overview
+
+The HiveMQ Extension SDK provides the Java API for developing HiveMQ extensions. The SDK defines interfaces for authentication, authorization, client initialization, packet interception, and service access.
+
+## SDK Dependency
+
+### Maven
+
+Add the HiveMQ Extension SDK to your `pom.xml`:
+
+```xml
+<dependency>
+    <groupId>com.hivemq</groupId>
+    <artifactId>hivemq-extension-sdk</artifactId>
+    <version>4.28.0</version>
+    <scope>provided</scope>
+</dependency>
+```
+
+<Note>
+Use `provided` scope because HiveMQ provides the SDK at runtime.
+</Note>
+
+### Gradle
+
+Add the SDK to your `build.gradle`:
+
+```gradle
+dependencies {
+    compileOnly 'com.hivemq:hivemq-extension-sdk:4.28.0'
+}
+```
+
+Or for Kotlin DSL (`build.gradle.kts`):
+
+```kotlin
+dependencies {
+    compileOnly("com.hivemq:hivemq-extension-sdk:4.28.0")
+}
+```
+
+## Core Interfaces
+
+### ExtensionMain
+
+The main entry point for every extension:
+
+```java
+package com.hivemq.extension.sdk.api;
+
+import com.hivemq.extension.sdk.api.annotations.NotNull;
+import com.hivemq.extension.sdk.api.parameter.*;
+
+public interface ExtensionMain {
+    
+    /**
+     * Called when the extension is started.
+     * Register providers and initialize resources here.
+     */
+    void extensionStart(
+        @NotNull ExtensionStartInput input,
+        @NotNull ExtensionStartOutput output
+    );
+    
+    /**
+     * Called when the extension is stopped.
+     * Clean up resources here.
+     */
+    void extensionStop(
+        @NotNull ExtensionStopInput input,
+        @NotNull ExtensionStopOutput output
+    );
+}
+```
+
+**Implementation Example:**
+
+```java
+public class MyExtension implements ExtensionMain {
+    
+    @Override
+    public void extensionStart(
+            @NotNull ExtensionStartInput input,
+            @NotNull ExtensionStartOutput output) {
+        
+        ExtensionInformation info = input.getExtensionInformation();
+        System.out.println("Starting " + info.getName() + " v" + info.getVersion());
+        
+        // Register providers
+        Services services = input.getServices();
+        // ...
+    }
+    
+    @Override
+    public void extensionStop(
+            @NotNull ExtensionStopInput input,
+            @NotNull ExtensionStopOutput output) {
+        
+        System.out.println("Stopping extension");
+        // Cleanup
+    }
+}
+```
+
+See `README.adoc:265` for embedded extension example.
+
+### ExtensionStartInput
+
+Provides access to extension information and services:
+
+```java
+public interface ExtensionStartInput {
+    
+    /**
+     * @return Information about this extension
+     */
+    @NotNull ExtensionInformation getExtensionInformation();
+    
+    /**
+     * @return Server information
+     */
+    @NotNull ServerInformation getServerInformation();
+    
+    /**
+     * @return HiveMQ services (client, publish, subscription, etc.)
+     */
+    @NotNull Services getServices();
+    
+    /**
+     * @return Previous version if this is an upgrade, null otherwise
+     */
+    @Nullable String getPreviousVersion();
+}
+```
+
+### ExtensionStartOutput
+
+Controls extension startup behavior:
+
+```java
+public interface ExtensionStartOutput {
+    
+    /**
+     * Prevent the extension from starting.
+     * Call this if initialization fails.
+     */
+    void preventExtensionStartup(@NotNull String reason);
+}
+```
+
+**Usage Example:**
+
+```java
+@Override
+public void extensionStart(
+        @NotNull ExtensionStartInput input,
+        @NotNull ExtensionStartOutput output) {
+    
+    try {
+        // Initialize database connection
+        database.connect();
+    } catch (Exception e) {
+        output.preventExtensionStartup("Failed to connect to database: " + e.getMessage());
+        return;
+    }
+}
+```
+
+## Services API
+
+The SDK provides services for interacting with HiveMQ:
+
+### ClientService
+
+Manage and query MQTT clients:
+
+```java
+ClientService clientService = services.clientService();
+
+// Get client by ID
+Optional<ClientInformation> client = clientService.getClient("client-123");
+
+// Disconnect client
+clientService.disconnectClient("client-123");
+
+// Iterate all clients
+clientService.iterateAllClients(new ClientCallback() {
+    @Override
+    public void onClientResult(ClientInformation client) {
+        System.out.println("Client: " + client.getClientId());
+    }
+});
+```
+
+### PublishService
+
+Publish MQTT messages:
+
+```java
+PublishService publishService = services.publishService();
+
+// Create and publish message
+Publish publish = Publish.builder()
+    .topic("status/temperature")
+    .qos(Qos.AT_LEAST_ONCE)
+    .payload(ByteBuffer.wrap("23.5".getBytes()))
+    .build();
+
+publishService.publish(publish);
+```
+
+### SubscriptionService
+
+Manage client subscriptions:
+
+```java
+SubscriptionService subscriptionService = services.subscriptionService();
+
+// Get client subscriptions
+Set<TopicSubscription> subscriptions = 
+    subscriptionService.getSubscriptions("client-123");
+
+// Add subscription programmatically
+subscriptionService.addSubscription(
+    "client-123",
+    TopicSubscription.of("sensor/#", Qos.EXACTLY_ONCE)
+);
+
+// Remove subscription
+subscriptionService.removeSubscription(
+    "client-123",
+    "sensor/#"
+);
+```
+
+### RetainedMessageService
+
+Manage retained messages:
+
+```java
+RetainedMessageService retainedService = services.retainedMessageService();
+
+// Get retained messages for topic
+Set<RetainedMessage> retained = retainedService.getRetainedMessages();
+
+// Clear retained message
+retainedService.clear("status/temperature");
+```
+
+### ManagedExtensionExecutorService
+
+Execute background tasks:
+
+```java
+ManagedExtensionExecutorService executor = services.managedExtensionExecutorService();
+
+// Submit background task
+executor.submit(new Runnable() {
+    @Override
+    public void run() {
+        // Background processing
+    }
+});
+
+// Schedule periodic task
+executor.scheduleAtFixedRate(
+    () -> System.out.println("Heartbeat"),
+    0, 60, TimeUnit.SECONDS
+);
+```
+
+## Provider Interfaces
+
+Providers create instances of authenticators, authorizers, initializers, and interceptors.
+
+### AuthenticatorProvider
+
+Provides authenticator instances:
+
+```java
+public interface AuthenticatorProvider {
+    
+    /**
+     * Called for each client authentication.
+     * 
+     * @param input Contains client and connection information
+     * @return Authenticator instance or null to skip
+     */
+    @Nullable Authenticator getAuthenticator(
+        @NotNull AuthenticatorProviderInput input
+    );
+}
+```
+
+See `Authenticators.java:34` for internal interface.
+
+### AuthorizerProvider
+
+Provides authorizer instances:
+
+```java
+public interface AuthorizerProvider {
+    
+    /**
+     * Called for each authorization check.
+     * 
+     * @param input Contains client information
+     * @return Authorizer instance or null to skip
+     */
+    @Nullable Authorizer getAuthorizer(
+        @NotNull AuthorizerProviderInput input
+    );
+}
+```
+
+See `Authorizers.java:38` for internal interface.
+
+### ClientInitializer
+
+Initializes client context on connection:
+
+```java
+public interface ClientInitializer {
+    
+    /**
+     * Called when a client connects successfully.
+     * 
+     * @param input Client and connection information
+     * @param output Context for registering client-specific callbacks
+     */
+    void initialize(
+        @NotNull InitializerInput input,
+        @NotNull ClientContext output
+    );
+}
+```
+
+See `Initializers.java:34` for internal interface.
+
+### InterceptorProvider
+
+Provides packet interceptor instances:
+
+```java
+public interface PublishInboundInterceptorProvider {
+    
+    /**
+     * Called for each inbound PUBLISH packet.
+     * 
+     * @param input Provider input
+     * @return Interceptor instance or null
+     */
+    @Nullable PublishInboundInterceptor getPublishInboundInterceptor(
+        @NotNull PublishInboundInterceptorProviderInput input
+    );
+}
+```
+
+See `Interceptors.java:44` for internal interface.
+
+## Annotations
+
+The SDK uses JSR-305 annotations for null safety:
+
+- `@NotNull` - Parameter/return value must not be null
+- `@Nullable` - Parameter/return value may be null
+- `@Immutable` - Object is immutable after construction
+- `@ThreadSafe` - Class is thread-safe
+
+**Example:**
+
+```java
+import com.hivemq.extension.sdk.api.annotations.NotNull;
+import com.hivemq.extension.sdk.api.annotations.Nullable;
+
+public class MyAuthenticator implements Authenticator {
+    
+    @Override
+    public void authenticate(
+            @NotNull AuthenticationInput input,
+            @NotNull AuthenticationOutput output) {
+        
+        @Nullable String username = input.getConnectPacket()
+            .getUserName()
+            .orElse(null);
+        
+        if (username == null) {
+            output.failAuthentication();
+            return;
+        }
+        
+        // Authenticate...
+    }
+}
+```
+
+## Package Structure
+
+The Extension SDK is organized into packages:
+
+```
+com.hivemq.extension.sdk.api
+├── annotations/          # Null safety and thread safety annotations
+├── auth/                 # Authentication interfaces
+├── client/               # Client information and context
+├── events/               # Event interfaces
+├── interceptor/          # Packet interceptor interfaces
+│   ├── connack/
+│   ├── connect/
+│   ├── disconnect/
+│   ├── publish/
+│   ├── subscribe/
+│   └── unsubscribe/
+├── packets/              # MQTT packet representations
+│   ├── auth/
+│   ├── connect/
+│   ├── disconnect/
+│   ├── publish/
+│   └── subscribe/
+├── parameter/            # Input/output parameter objects
+├── services/             # HiveMQ services
+│   ├── auth/
+│   ├── builder/
+│   ├── executor/
+│   ├── intializer/
+│   ├── publish/
+│   └── subscription/
+└── ExtensionMain.java    # Main extension interface
+```
+
+## Building Extensions
+
+### Project Setup
+
+Minimal `pom.xml` for extension development:
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 
+         http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.example</groupId>
+    <artifactId>my-hivemq-extension</artifactId>
+    <version>1.0.0</version>
+
+    <properties>
+        <maven.compiler.source>11</maven.compiler.source>
+        <maven.compiler.target>11</maven.compiler.target>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>com.hivemq</groupId>
+            <artifactId>hivemq-extension-sdk</artifactId>
+            <version>4.28.0</version>
+            <scope>provided</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-shade-plugin</artifactId>
+                <version>3.2.4</version>
+                <executions>
+                    <execution>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>shade</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>
+```
+
+### Building with Maven
+
+```bash
+mvn clean package
+```
+
+Output: `target/my-hivemq-extension-1.0.0.jar`
+
+### Building with Gradle
+
+```bash
+./gradlew clean build
+```
+
+## Version Compatibility
+
+- **Java 11+** required for extension development
+- **SDK version** should match HiveMQ major version
+- Extensions built for HiveMQ 4.x are compatible with all 4.x releases
+
+<Warning>
+Always use `provided` or `compileOnly` scope for the SDK dependency to avoid ClassLoader conflicts.
+</Warning>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Authentication" icon="lock" href="/extensions/authentication">
+    Implement custom authentication
+  </Card>
+  <Card title="Authorization" icon="shield" href="/extensions/authorization">
+    Control publish and subscribe permissions
+  </Card>
+  <Card title="Client Initializers" icon="play" href="/extensions/client-initializers">
+    Initialize client context on connection
+  </Card>
+  <Card title="Packet Interceptors" icon="filter" href="/extensions/packet-interceptors">
+    Intercept and modify MQTT packets
+  </Card>
+</CardGroup>

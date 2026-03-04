@@ -1,0 +1,600 @@
+---
+title: 'Publishing and Subscribing'
+description: 'Master MQTT publish/subscribe patterns with practical examples in Python, JavaScript, Java, and Mosquitto CLI'
+---
+
+## Overview
+
+The publish/subscribe pattern is the foundation of MQTT communication. Publishers send messages to topics without knowing who receives them, while subscribers receive messages from topics they're interested in. This decoupling enables scalable, flexible IoT architectures.
+
+## Topic Structure
+
+MQTT topics are hierarchical strings separated by forward slashes, similar to file paths.
+
+### Topic Best Practices
+
+```
+sensors/building1/floor2/temperature
+devices/esp32/001/status
+vehicles/truck/vin123/location/gps
+factory/assembly-line/machine5/alerts
+```
+
+<Note>
+Topics are **case-sensitive**. `sensors/temp` and `sensors/Temp` are different topics.
+</Note>
+
+### Topic Wildcards
+
+Subscribers can use wildcards to match multiple topics:
+
+<Tabs>
+  <Tab title="Single Level (+)">
+    The `+` wildcard matches **exactly one** topic level:
+    
+    ```
+    sensors/+/temperature
+    ```
+    
+    **Matches:**
+    - `sensors/room1/temperature` ✓
+    - `sensors/room2/temperature` ✓
+    
+    **Doesn't match:**
+    - `sensors/building1/room1/temperature` ✗
+    - `sensors/temperature` ✗
+  </Tab>
+  
+  <Tab title="Multi Level (#)">
+    The `#` wildcard matches **zero or more** topic levels and must be the last character:
+    
+    ```
+    sensors/#
+    ```
+    
+    **Matches:**
+    - `sensors/temperature` ✓
+    - `sensors/room1/temperature` ✓
+    - `sensors/building1/floor2/humidity` ✓
+    
+    **Invalid:**
+    - `sensors/#/temperature` ✗ (# must be last)
+  </Tab>
+  
+  <Tab title="Combining Wildcards">
+    You can combine both wildcards:
+    
+    ```
+    sensors/+/floor1/#
+    ```
+    
+    **Matches:**
+    - `sensors/building1/floor1/temp` ✓
+    - `sensors/building2/floor1/room5/humidity` ✓
+    
+    **Doesn't match:**
+    - `sensors/building1/floor2/temp` ✗
+  </Tab>
+</Tabs>
+
+<Warning>
+Avoid subscribing to `#` (all topics) in production as it receives every message on the broker.
+</Warning>
+
+## Publishing Messages
+
+### Python Examples
+
+<CodeGroup>
+```python Simple Publish
+import paho.mqtt.client as mqtt
+import json
+import time
+
+client = mqtt.Client("publisher_001")
+client.connect("localhost", 1883, 60)
+
+# Publish temperature reading
+temperature = 22.5
+client.publish("sensors/temperature", str(temperature))
+
+# Publish JSON payload
+data = {
+    "sensor_id": "temp_001",
+    "value": 22.5,
+    "unit": "celsius",
+    "timestamp": time.time()
+}
+client.publish("sensors/data", json.dumps(data))
+
+client.disconnect()
+```
+
+```python Publish with QoS
+import paho.mqtt.publish as publish
+
+# Single message with QoS 1
+publish.single(
+    "devices/status",
+    payload="online",
+    qos=1,
+    hostname="localhost",
+    port=1883
+)
+
+# Multiple messages
+msgs = [
+    {'topic': "sensors/temp", 'payload': "22.5", 'qos': 1},
+    {'topic': "sensors/humidity", 'payload': "65", 'qos': 1},
+    {'topic': "sensors/pressure", 'payload': "1013", 'qos': 0}
+]
+publish.multiple(msgs, hostname="localhost")
+```
+
+```python Continuous Publishing
+import paho.mqtt.client as mqtt
+import time
+import random
+
+def on_connect(client, userdata, flags, rc):
+    print(f"Connected with result code {rc}")
+
+def on_publish(client, userdata, mid):
+    print(f"Message {mid} published")
+
+client = mqtt.Client("sensor_simulator")
+client.on_connect = on_connect
+client.on_publish = on_publish
+
+client.connect("localhost", 1883, 60)
+client.loop_start()
+
+try:
+    while True:
+        temp = 20 + random.uniform(-5, 5)
+        humidity = 50 + random.uniform(-10, 10)
+        
+        client.publish("home/livingroom/temperature", f"{temp:.2f}", qos=1)
+        client.publish("home/livingroom/humidity", f"{humidity:.2f}", qos=1)
+        
+        time.sleep(5)
+except KeyboardInterrupt:
+    client.loop_stop()
+    client.disconnect()
+```
+</CodeGroup>
+
+### JavaScript Examples
+
+<CodeGroup>
+```javascript Basic Publishing
+const mqtt = require('mqtt');
+const client = mqtt.connect('mqtt://localhost:1883');
+
+client.on('connect', () => {
+  console.log('Connected to broker');
+  
+  // Publish simple message
+  client.publish('sensors/temperature', '22.5');
+  
+  // Publish with options
+  client.publish('devices/status', 'online', {
+    qos: 1,
+    retain: true
+  }, (error) => {
+    if (error) {
+      console.error('Publish error:', error);
+    } else {
+      console.log('Message published');
+    }
+  });
+});
+```
+
+```javascript JSON Publishing
+const mqtt = require('mqtt');
+const client = mqtt.connect('mqtt://localhost:1883');
+
+client.on('connect', () => {
+  const sensorData = {
+    deviceId: 'sensor_001',
+    readings: {
+      temperature: 22.5,
+      humidity: 65,
+      pressure: 1013
+    },
+    timestamp: new Date().toISOString()
+  };
+  
+  client.publish(
+    'sensors/multi/data',
+    JSON.stringify(sensorData),
+    { qos: 1 },
+    (err) => {
+      if (!err) console.log('Sensor data published');
+      client.end();
+    }
+  );
+});
+```
+
+```javascript Periodic Publishing
+const mqtt = require('mqtt');
+const client = mqtt.connect('mqtt://localhost:1883');
+
+client.on('connect', () => {
+  console.log('Starting periodic publishing');
+  
+  setInterval(() => {
+    const data = {
+      value: Math.random() * 100,
+      timestamp: Date.now()
+    };
+    
+    client.publish(
+      'telemetry/device001',
+      JSON.stringify(data),
+      { qos: 1 }
+    );
+  }, 10000); // Every 10 seconds
+});
+```
+</CodeGroup>
+
+### Java Examples
+
+<CodeGroup>
+```java Simple Publish
+import com.hivemq.client.mqtt.mqtt5.Mqtt5BlockingClient;
+import com.hivemq.client.mqtt.mqtt5.Mqtt5Client;
+import com.hivemq.client.mqtt.datatypes.MqttQos;
+import java.nio.charset.StandardCharsets;
+
+public class SimplePublisher {
+    public static void main(String[] args) {
+        Mqtt5BlockingClient client = Mqtt5Client.builder()
+                .identifier("java_publisher")
+                .serverHost("localhost")
+                .serverPort(1883)
+                .buildBlocking();
+
+        client.connect();
+
+        // Publish message
+        client.publishWith()
+                .topic("sensors/temperature")
+                .payload("22.5".getBytes(StandardCharsets.UTF_8))
+                .qos(MqttQos.AT_LEAST_ONCE)
+                .send();
+
+        System.out.println("Message published");
+        client.disconnect();
+    }
+}
+```
+
+```java Async Publishing
+import com.hivemq.client.mqtt.mqtt5.Mqtt5AsyncClient;
+import com.hivemq.client.mqtt.mqtt5.Mqtt5Client;
+import com.hivemq.client.mqtt.datatypes.MqttQos;
+import java.nio.charset.StandardCharsets;
+
+public class AsyncPublisher {
+    public static void main(String[] args) {
+        Mqtt5AsyncClient client = Mqtt5Client.builder()
+                .identifier("async_publisher")
+                .serverHost("localhost")
+                .buildAsync();
+
+        client.connect()
+                .thenCompose(connAck -> 
+                    client.publishWith()
+                            .topic("devices/status")
+                            .payload("online".getBytes())
+                            .qos(MqttQos.EXACTLY_ONCE)
+                            .retain(true)
+                            .send()
+                )
+                .whenComplete((publishResult, throwable) -> {
+                    if (throwable != null) {
+                        System.err.println("Publish failed: " + throwable.getMessage());
+                    } else {
+                        System.out.println("Published successfully");
+                    }
+                    client.disconnect();
+                });
+    }
+}
+```
+</CodeGroup>
+
+## Subscribing to Topics
+
+### Python Examples
+
+<CodeGroup>
+```python Basic Subscription
+import paho.mqtt.client as mqtt
+
+def on_connect(client, userdata, flags, rc):
+    print(f"Connected with result code {rc}")
+    # Subscribe on connect to handle reconnections
+    client.subscribe("sensors/temperature", qos=1)
+
+def on_message(client, userdata, msg):
+    print(f"Topic: {msg.topic}")
+    print(f"Payload: {msg.payload.decode()}")
+    print(f"QoS: {msg.qos}")
+    print("---")
+
+client = mqtt.Client("subscriber_001")
+client.on_connect = on_connect
+client.on_message = on_message
+
+client.connect("localhost", 1883, 60)
+client.loop_forever()
+```
+
+```python Multiple Subscriptions
+import paho.mqtt.client as mqtt
+import json
+
+def on_connect(client, userdata, flags, rc):
+    # Subscribe to multiple topics with different QoS
+    subscriptions = [
+        ("sensors/temperature", 1),
+        ("sensors/humidity", 1),
+        ("devices/+/status", 0),
+        ("alerts/#", 2)
+    ]
+    client.subscribe(subscriptions)
+    print("Subscribed to all topics")
+
+def on_message(client, userdata, msg):
+    topic = msg.topic
+    
+    try:
+        payload = json.loads(msg.payload.decode())
+        print(f"{topic}: {payload}")
+    except json.JSONDecodeError:
+        print(f"{topic}: {msg.payload.decode()}")
+
+client = mqtt.Client("multi_subscriber")
+client.on_connect = on_connect
+client.on_message = on_message
+client.connect("localhost", 1883)
+client.loop_forever()
+```
+
+```python Topic-Specific Handlers
+import paho.mqtt.client as mqtt
+
+def on_temperature(client, userdata, msg):
+    temp = float(msg.payload.decode())
+    if temp > 30:
+        print(f"HIGH TEMPERATURE ALERT: {temp}°C")
+
+def on_status(client, userdata, msg):
+    status = msg.payload.decode()
+    device = msg.topic.split('/')[1]
+    print(f"Device {device} is {status}")
+
+def on_connect(client, userdata, flags, rc):
+    client.subscribe("sensors/temperature")
+    client.subscribe("devices/+/status")
+
+client = mqtt.Client("handler_subscriber")
+client.on_connect = on_connect
+
+# Register topic-specific callbacks
+client.message_callback_add("sensors/temperature", on_temperature)
+client.message_callback_add("devices/+/status", on_status)
+
+client.connect("localhost", 1883)
+client.loop_forever()
+```
+</CodeGroup>
+
+### JavaScript Examples
+
+<CodeGroup>
+```javascript Simple Subscription
+const mqtt = require('mqtt');
+const client = mqtt.connect('mqtt://localhost:1883');
+
+client.on('connect', () => {
+  console.log('Connected to broker');
+  
+  // Subscribe to topic
+  client.subscribe('sensors/temperature', { qos: 1 }, (err) => {
+    if (!err) {
+      console.log('Subscribed successfully');
+    }
+  });
+});
+
+client.on('message', (topic, payload) => {
+  console.log(`Received message on ${topic}: ${payload.toString()}`);
+});
+```
+
+```javascript Wildcard Subscriptions
+const mqtt = require('mqtt');
+const client = mqtt.connect('mqtt://localhost:1883');
+
+client.on('connect', () => {
+  // Subscribe to multiple patterns
+  const topics = {
+    'sensors/+/temperature': { qos: 1 },
+    'devices/#': { qos: 0 },
+    'alerts/critical': { qos: 2 }
+  };
+  
+  client.subscribe(topics, (err, granted) => {
+    if (err) {
+      console.error('Subscription error:', err);
+    } else {
+      console.log('Subscriptions granted:', granted);
+    }
+  });
+});
+
+client.on('message', (topic, payload, packet) => {
+  const message = payload.toString();
+  
+  if (topic.startsWith('sensors/')) {
+    console.log(`Sensor data: ${message}`);
+  } else if (topic.startsWith('alerts/')) {
+    console.log(`ALERT: ${message}`);
+  } else {
+    console.log(`${topic}: ${message}`);
+  }
+});
+```
+</CodeGroup>
+
+### Java Examples
+
+<CodeGroup>
+```java Blocking Subscription
+import com.hivemq.client.mqtt.mqtt5.Mqtt5BlockingClient;
+import com.hivemq.client.mqtt.mqtt5.Mqtt5Client;
+import com.hivemq.client.mqtt.datatypes.MqttQos;
+import com.hivemq.client.mqtt.mqtt5.message.publish.Mqtt5Publish;
+
+public class BlockingSubscriber {
+    public static void main(String[] args) {
+        Mqtt5BlockingClient client = Mqtt5Client.builder()
+                .identifier("java_subscriber")
+                .serverHost("localhost")
+                .buildBlocking();
+
+        client.connect();
+
+        client.subscribeWith()
+                .topicFilter("sensors/#")
+                .qos(MqttQos.AT_LEAST_ONCE)
+                .send();
+
+        try (Mqtt5BlockingClient.Mqtt5Publishes publishes = client.publishes(MqttQos.AT_LEAST_ONCE)) {
+            publishes.receive().ifPresent(publish -> {
+                String topic = publish.getTopic().toString();
+                String payload = new String(publish.getPayloadAsBytes());
+                System.out.println(topic + ": " + payload);
+            });
+        }
+    }
+}
+```
+
+```java Async Subscription
+import com.hivemq.client.mqtt.mqtt5.Mqtt5AsyncClient;
+import com.hivemq.client.mqtt.mqtt5.Mqtt5Client;
+import com.hivemq.client.mqtt.datatypes.MqttQos;
+
+public class AsyncSubscriber {
+    public static void main(String[] args) {
+        Mqtt5AsyncClient client = Mqtt5Client.builder()
+                .identifier("async_subscriber")
+                .serverHost("localhost")
+                .buildAsync();
+
+        client.connect()
+                .thenCompose(connAck ->
+                    client.subscribeWith()
+                            .topicFilter("sensors/+/temperature")
+                            .qos(MqttQos.EXACTLY_ONCE)
+                            .callback(publish -> {
+                                String topic = publish.getTopic().toString();
+                                String payload = new String(publish.getPayloadAsBytes());
+                                System.out.println(topic + ": " + payload);
+                            })
+                            .send()
+                )
+                .whenComplete((subAck, throwable) -> {
+                    if (throwable != null) {
+                        System.err.println("Subscribe failed: " + throwable.getMessage());
+                    } else {
+                        System.out.println("Subscribed successfully");
+                    }
+                });
+    }
+}
+```
+</CodeGroup>
+
+## Publish/Subscribe Patterns
+
+<Tabs>
+  <Tab title="One-to-Many">
+    Single publisher, multiple subscribers:
+    
+    ```python
+    # Publisher
+    client.publish("broadcast/news", "Breaking news update")
+    
+    # Subscriber 1, 2, 3... all receive the same message
+    client.subscribe("broadcast/news")
+    ```
+    
+    **Use cases:** Notifications, broadcasts, alerts
+  </Tab>
+  
+  <Tab title="Many-to-One">
+    Multiple publishers, single subscriber:
+    
+    ```python
+    # Publishers send to different topics
+    client1.publish("data/sensor1", data1)
+    client2.publish("data/sensor2", data2)
+    
+    # Aggregator subscribes to all
+    client.subscribe("data/#")
+    ```
+    
+    **Use cases:** Data aggregation, monitoring dashboards
+  </Tab>
+  
+  <Tab title="Request/Response">
+    Implement RPC-style communication:
+    
+    ```python
+    # Requester
+    client.subscribe(f"response/{client_id}")
+    client.publish("request/getStatus", client_id)
+    
+    # Responder
+    def on_message(client, userdata, msg):
+        requester_id = msg.payload.decode()
+        response = get_status()
+        client.publish(f"response/{requester_id}", response)
+    ```
+  </Tab>
+</Tabs>
+
+## Best Practices
+
+<Tip>
+**Publishing:**
+- Use meaningful, hierarchical topic names
+- Keep payloads small and efficient
+- Choose appropriate QoS levels
+- Avoid publishing to `$SYS` topics (reserved for broker)
+
+**Subscribing:**
+- Subscribe in `on_connect` callback for auto-reconnection
+- Use wildcards judiciously to avoid message overload
+- Unsubscribe from topics when no longer needed
+- Handle malformed messages gracefully
+</Tip>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Quality of Service" icon="shield" href="/mqtt/guides/quality-of-service">
+    Understand QoS 0, 1, and 2 for reliable delivery
+  </Card>
+  <Card title="Retained Messages" icon="bookmark" href="/mqtt/guides/retained-messages">
+    Learn about message retention behavior
+  </Card>
+</CardGroup>

@@ -1,0 +1,244 @@
+---
+title: "TLS Transport"
+description: "Configure secure MQTT over TLS/SSL"
+---
+
+## Overview
+
+MQTT over TLS encrypts all communication between clients and the broker, protecting credentials and message payloads. The standard port for MQTT over TLS is 8883.
+
+## Configuration
+
+### Basic TLS Listener
+
+```xml config.xml
+<hivemq>
+  <listeners>
+    <tls-tcp-listener>
+      <port>8883</port>
+      <bind-address>0.0.0.0</bind-address>
+      <tls>
+        <keystore>
+          <path>/path/to/keystore.jks</path>
+          <password>keystore-password</password>
+          <private-key-password>key-password</private-key-password>
+        </keystore>
+      </tls>
+    </tls-tcp-listener>
+  </listeners>
+</hivemq>
+```
+
+### With Client Certificate Authentication
+
+```xml
+<tls-tcp-listener>
+  <port>8883</port>
+  <bind-address>0.0.0.0</bind-address>
+  <tls>
+    <keystore>
+      <path>/opt/hivemq/conf/keystore.jks</path>
+      <password>keystore-password</password>
+      <private-key-password>key-password</private-key-password>
+    </keystore>
+    <truststore>
+      <path>/opt/hivemq/conf/truststore.jks</path>
+      <password>truststore-password</password>
+    </truststore>
+    <client-authentication-mode>REQUIRED</client-authentication-mode>
+  </tls>
+</tls-tcp-listener>
+```
+
+### Client Authentication Modes
+
+| Mode | Description |
+|------|-------------|
+| `NONE` | No client certificate required |
+| `OPTIONAL` | Client certificate accepted but not required |
+| `REQUIRED` | Client must present valid certificate |
+
+## Certificate Setup
+
+### Generate Self-Signed Certificate (Development)
+
+```bash
+# Generate keystore with self-signed certificate
+keytool -genkey -keyalg RSA -alias hivemq -keystore keystore.jks \
+  -storepass changeit -validity 365 -keysize 2048
+
+# Export certificate
+keytool -export -alias hivemq -file hivemq.crt -keystore keystore.jks
+```
+
+<Warning>
+  Self-signed certificates are suitable for development only. Use certificates from a trusted CA for production.
+</Warning>
+
+### Using Let's Encrypt Certificates
+
+```bash
+# Convert Let's Encrypt PEM to JKS
+openssl pkcs12 -export -in fullchain.pem -inkey privkey.pem \
+  -out keystore.p12 -name hivemq
+
+keytool -importkeystore -srckeystore keystore.p12 -srcstoretype PKCS12 \
+  -destkeystore keystore.jks -deststoretype JKS
+```
+
+## Client Connections
+
+### Python with TLS
+
+```python
+import paho.mqtt.client as mqtt
+import ssl
+
+client = mqtt.Client()
+
+# With CA certificate verification
+client.tls_set(
+    ca_certs="/path/to/ca.crt",
+    certfile=None,
+    keyfile=None,
+    cert_reqs=ssl.CERT_REQUIRED,
+    tls_version=ssl.PROTOCOL_TLSv1_2
+)
+
+client.connect("broker.example.com", 8883, 60)
+```
+
+### Python with Client Certificate
+
+```python
+client = mqtt.Client()
+
+client.tls_set(
+    ca_certs="/path/to/ca.crt",
+    certfile="/path/to/client.crt",
+    keyfile="/path/to/client.key",
+    cert_reqs=ssl.CERT_REQUIRED,
+    tls_version=ssl.PROTOCOL_TLSv1_2
+)
+
+client.connect("broker.example.com", 8883, 60)
+```
+
+### Java with TLS
+
+```java
+import com.hivemq.client.mqtt.mqtt5.Mqtt5BlockingClient;
+import com.hivemq.client.mqtt.mqtt5.Mqtt5Client;
+
+Mqtt5BlockingClient client = Mqtt5Client.builder()
+    .identifier("secure-client")
+    .serverHost("broker.example.com")
+    .serverPort(8883)
+    .sslWithDefaultConfig()
+    .buildBlocking();
+
+client.connect();
+```
+
+### Mosquitto CLI with TLS
+
+```bash
+# With CA certificate
+mosquitto_sub -h broker.example.com -p 8883 -t "test/topic" \
+  --cafile /path/to/ca.crt
+
+# With client certificate
+mosquitto_sub -h broker.example.com -p 8883 -t "test/topic" \
+  --cafile /path/to/ca.crt \
+  --cert /path/to/client.crt \
+  --key /path/to/client.key
+```
+
+## TLS Protocol Versions
+
+### Supported Versions
+
+```xml
+<tls>
+  <protocols>
+    <protocol>TLSv1.2</protocol>
+    <protocol>TLSv1.3</protocol>
+  </protocols>
+  <cipher-suites>
+    <cipher-suite>TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256</cipher-suite>
+    <cipher-suite>TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384</cipher-suite>
+  </cipher-suites>
+</tls>
+```
+
+<Tip>
+  Use TLS 1.3 when possible for better performance and security. Disable TLS 1.0 and 1.1 in production.
+</Tip>
+
+## Troubleshooting
+
+### Common Issues
+
+<AccordionGroup>
+  <Accordion title="Certificate verification failed">
+    **Cause**: Client cannot verify server certificate
+    
+    **Solutions**:
+    - Ensure CA certificate is correctly installed
+    - Check certificate expiration date
+    - Verify hostname matches certificate CN/SAN
+    - Disable verification for testing (not recommended for production)
+  </Accordion>
+  
+  <Accordion title="Client certificate required">
+    **Cause**: Server requires client certificate but client didn't provide one
+    
+    **Solutions**:
+    - Provide client certificate and key
+    - Change `client-authentication-mode` to `OPTIONAL` or `NONE`
+    - Verify client certificate is signed by trusted CA
+  </Accordion>
+  
+  <Accordion title="Handshake failure">
+    **Cause**: TLS protocol or cipher suite mismatch
+    
+    **Solutions**:
+    - Ensure client and server support compatible TLS versions
+    - Check cipher suite compatibility
+    - Update client/server libraries
+  </Accordion>
+</AccordionGroup>
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Use Strong Certificates" icon="shield">
+    Use 2048-bit or 4096-bit RSA keys from trusted CAs
+  </Card>
+  <Card title="Enable TLS 1.2+" icon="lock">
+    Disable TLS 1.0 and 1.1 to prevent vulnerabilities
+  </Card>
+  <Card title="Regular Rotation" icon="rotate">
+    Rotate certificates before expiration
+  </Card>
+  <Card title="Monitor Expiry" icon="clock">
+    Set up alerts for certificate expiration
+  </Card>
+</CardGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="TCP Transport" icon="network-wired" href="/mqtt/transports/tcp">
+    Basic MQTT over TCP
+  </Card>
+  <Card title="Secure WebSocket" icon="shield" href="/mqtt/transports/secure-websocket">
+    TLS for WebSocket connections
+  </Card>
+  <Card title="Security Config" icon="lock" href="/configuration/security">
+    Additional security settings
+  </Card>
+  <Card title="Authentication" icon="key" href="/extensions/authentication">
+    Implement authentication extensions
+  </Card>
+</CardGroup>

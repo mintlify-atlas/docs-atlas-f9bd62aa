@@ -1,0 +1,484 @@
+---
+title: "EmbeddedExtensionBuilder"
+description: "API reference for the EmbeddedExtensionBuilder interface"
+---
+
+The `EmbeddedExtensionBuilder` interface provides a fluent API for creating `EmbeddedExtension` instances with custom configuration.
+
+## Package
+
+```java
+com.hivemq.embedded.EmbeddedExtensionBuilder
+```
+
+## Interface Declaration
+
+```java
+public interface EmbeddedExtensionBuilder
+```
+
+**Since:** CE 2020.5
+
+## Methods
+
+### builder()
+
+Creates a new `EmbeddedExtensionBuilder` instance.
+
+```java
+static @NotNull EmbeddedExtensionBuilder builder()
+```
+
+**Returns:**
+- `EmbeddedExtensionBuilder` - A new builder instance
+
+**Example:**
+
+```java
+EmbeddedExtensionBuilder builder = EmbeddedExtensionBuilder.builder();
+```
+
+---
+
+### withId()
+
+Sets the unique ID of the extension.
+
+```java
+@NotNull EmbeddedExtensionBuilder withId(@NotNull String id)
+```
+
+**Parameters:**
+- `id` (`String`) - The unique ID of the extension
+
+**Returns:**
+- `EmbeddedExtensionBuilder` - This builder instance for method chaining
+
+**Required:** Yes
+
+**Example:**
+
+```java
+builder.withId("my-custom-extension");
+```
+
+---
+
+### withName()
+
+Sets the human-readable name of the extension.
+
+```java
+@NotNull EmbeddedExtensionBuilder withName(@NotNull String name)
+```
+
+**Parameters:**
+- `name` (`String`) - The name of the extension
+
+**Returns:**
+- `EmbeddedExtensionBuilder` - This builder instance for method chaining
+
+**Required:** Yes
+
+**Example:**
+
+```java
+builder.withName("My Custom Extension");
+```
+
+---
+
+### withVersion()
+
+Sets the version of the extension.
+
+```java
+@NotNull EmbeddedExtensionBuilder withVersion(@NotNull String version)
+```
+
+**Parameters:**
+- `version` (`String`) - The version of the extension
+
+**Returns:**
+- `EmbeddedExtensionBuilder` - This builder instance for method chaining
+
+**Required:** Yes
+
+**Example:**
+
+```java
+builder.withVersion("1.0.0");
+```
+
+---
+
+### withAuthor()
+
+Sets the author of the extension.
+
+```java
+@NotNull EmbeddedExtensionBuilder withAuthor(@Nullable String author)
+```
+
+**Parameters:**
+- `author` (`String`) - The author of the extension, or `null`
+
+**Returns:**
+- `EmbeddedExtensionBuilder` - This builder instance for method chaining
+
+**Required:** No (optional)
+
+**Default:** No default value
+
+**Example:**
+
+```java
+builder.withAuthor("HiveMQ Team");
+```
+
+---
+
+### withPriority()
+
+Sets the extension's execution priority.
+
+```java
+@NotNull EmbeddedExtensionBuilder withPriority(int priority)
+```
+
+**Parameters:**
+- `priority` (`int`) - The priority value. Extensions with higher priority are executed first.
+
+**Returns:**
+- `EmbeddedExtensionBuilder` - This builder instance for method chaining
+
+**Required:** No (optional)
+
+**Default:** `0`
+
+**Example:**
+
+```java
+builder.withPriority(100); // High priority
+```
+
+---
+
+### withStartPriority()
+
+Sets the extension's start priority.
+
+```java
+@NotNull EmbeddedExtensionBuilder withStartPriority(int startPriority)
+```
+
+**Parameters:**
+- `startPriority` (`int`) - The start priority value. Extensions with higher start priority are started first.
+
+**Returns:**
+- `EmbeddedExtensionBuilder` - This builder instance for method chaining
+
+**Required:** No (optional)
+
+**Default:** `1000`
+
+**Example:**
+
+```java
+builder.withStartPriority(2000); // Starts early
+```
+
+---
+
+### withExtensionMain()
+
+Sets the main class of the extension.
+
+```java
+@NotNull EmbeddedExtensionBuilder withExtensionMain(@NotNull ExtensionMain extensionMain)
+```
+
+**Parameters:**
+- `extensionMain` (`ExtensionMain`) - The extension main class that implements `extensionStart()` and `extensionStop()`
+
+**Returns:**
+- `EmbeddedExtensionBuilder` - This builder instance for method chaining
+
+**Required:** Yes
+
+**Example:**
+
+```java
+builder.withExtensionMain(new MyExtensionMain());
+```
+
+---
+
+### build()
+
+Creates an `EmbeddedExtension` instance with the configured values.
+
+```java
+@NotNull EmbeddedExtension build()
+```
+
+**Returns:**
+- `EmbeddedExtension` - A new embedded extension instance
+
+**Throws:**
+- `IllegalStateException` - If any required parameter is missing
+
+**Required Parameters:**
+- `id`
+- `name`
+- `version`
+- `extensionMain`
+
+**Example:**
+
+```java
+EmbeddedExtension extension = builder
+    .withId("my-ext")
+    .withName("My Extension")
+    .withVersion("1.0.0")
+    .withExtensionMain(new MyExtensionMain())
+    .build();
+```
+
+## Usage Examples
+
+### Minimal Extension
+
+```java
+import com.hivemq.embedded.EmbeddedExtension;
+import com.hivemq.extension.sdk.api.ExtensionMain;
+import com.hivemq.extension.sdk.api.parameter.ExtensionStartInput;
+import com.hivemq.extension.sdk.api.parameter.ExtensionStartOutput;
+import com.hivemq.extension.sdk.api.parameter.ExtensionStopInput;
+import com.hivemq.extension.sdk.api.parameter.ExtensionStopOutput;
+import org.jetbrains.annotations.NotNull;
+
+public class MinimalExtension {
+    public static void main(String[] args) {
+        EmbeddedExtension extension = EmbeddedExtension.builder()
+            .withId("minimal-ext")
+            .withName("Minimal Extension")
+            .withVersion("1.0.0")
+            .withExtensionMain(new MinimalExtensionMain())
+            .build();
+    }
+    
+    private static class MinimalExtensionMain implements ExtensionMain {
+        @Override
+        public void extensionStart(
+                @NotNull ExtensionStartInput input,
+                @NotNull ExtensionStartOutput output) {
+            System.out.println("Started");
+        }
+        
+        @Override
+        public void extensionStop(
+                @NotNull ExtensionStopInput input,
+                @NotNull ExtensionStopOutput output) {
+            System.out.println("Stopped");
+        }
+    }
+}
+```
+
+### Full Configuration
+
+```java
+import com.hivemq.embedded.EmbeddedExtension;
+import com.hivemq.extension.sdk.api.ExtensionMain;
+import com.hivemq.extension.sdk.api.parameter.ExtensionStartInput;
+import com.hivemq.extension.sdk.api.parameter.ExtensionStartOutput;
+import com.hivemq.extension.sdk.api.parameter.ExtensionStopInput;
+import com.hivemq.extension.sdk.api.parameter.ExtensionStopOutput;
+import org.jetbrains.annotations.NotNull;
+
+public class FullConfiguration {
+    public static void main(String[] args) {
+        EmbeddedExtension extension = EmbeddedExtension.builder()
+            .withId("full-config-ext")
+            .withName("Fully Configured Extension")
+            .withVersion("2.1.5")
+            .withAuthor("Development Team")
+            .withPriority(75)
+            .withStartPriority(1500)
+            .withExtensionMain(new FullExtensionMain())
+            .build();
+        
+        System.out.println("Extension configured: " + extension.getName());
+    }
+    
+    private static class FullExtensionMain implements ExtensionMain {
+        @Override
+        public void extensionStart(
+                @NotNull ExtensionStartInput input,
+                @NotNull ExtensionStartOutput output) {
+            System.out.println("Full extension started");
+        }
+        
+        @Override
+        public void extensionStop(
+                @NotNull ExtensionStopInput input,
+                @NotNull ExtensionStopOutput output) {
+            System.out.println("Full extension stopped");
+        }
+    }
+}
+```
+
+### Priority-Based Extensions
+
+```java
+import com.hivemq.embedded.EmbeddedExtension;
+import com.hivemq.embedded.EmbeddedHiveMQ;
+import com.hivemq.extension.sdk.api.ExtensionMain;
+import com.hivemq.extension.sdk.api.parameter.ExtensionStartInput;
+import com.hivemq.extension.sdk.api.parameter.ExtensionStartOutput;
+import com.hivemq.extension.sdk.api.parameter.ExtensionStopInput;
+import com.hivemq.extension.sdk.api.parameter.ExtensionStopOutput;
+import org.jetbrains.annotations.NotNull;
+
+public class PriorityExtensions {
+    public static void main(String[] args) {
+        // This extension starts first (higher start priority)
+        EmbeddedExtension firstExtension = EmbeddedExtension.builder()
+            .withId("first-ext")
+            .withName("First Extension")
+            .withVersion("1.0.0")
+            .withStartPriority(2000)  // Starts first
+            .withPriority(100)         // Runs first
+            .withExtensionMain(new FirstExtensionMain())
+            .build();
+        
+        // This extension starts second (lower start priority)
+        EmbeddedExtension secondExtension = EmbeddedExtension.builder()
+            .withId("second-ext")
+            .withName("Second Extension")
+            .withVersion("1.0.0")
+            .withStartPriority(1000)   // Starts second
+            .withPriority(50)           // Runs second
+            .withExtensionMain(new SecondExtensionMain())
+            .build();
+        
+        // Note: Only one extension can be set via withEmbeddedExtension()
+        // For multiple extensions, use file-based extensions or call the method multiple times
+    }
+    
+    private static class FirstExtensionMain implements ExtensionMain {
+        @Override
+        public void extensionStart(
+                @NotNull ExtensionStartInput input,
+                @NotNull ExtensionStartOutput output) {
+            System.out.println("First extension started");
+        }
+        
+        @Override
+        public void extensionStop(
+                @NotNull ExtensionStopInput input,
+                @NotNull ExtensionStopOutput output) {
+            System.out.println("First extension stopped");
+        }
+    }
+    
+    private static class SecondExtensionMain implements ExtensionMain {
+        @Override
+        public void extensionStart(
+                @NotNull ExtensionStartInput input,
+                @NotNull ExtensionStartOutput output) {
+            System.out.println("Second extension started");
+        }
+        
+        @Override
+        public void extensionStop(
+                @NotNull ExtensionStopInput input,
+                @NotNull ExtensionStopOutput output) {
+            System.out.println("Second extension stopped");
+        }
+    }
+}
+```
+
+### Validation Example
+
+```java
+import com.hivemq.embedded.EmbeddedExtension;
+import com.hivemq.extension.sdk.api.ExtensionMain;
+import com.hivemq.extension.sdk.api.parameter.ExtensionStartInput;
+import com.hivemq.extension.sdk.api.parameter.ExtensionStartOutput;
+import com.hivemq.extension.sdk.api.parameter.ExtensionStopInput;
+import com.hivemq.extension.sdk.api.parameter.ExtensionStopOutput;
+import org.jetbrains.annotations.NotNull;
+
+public class ValidationExample {
+    public static void main(String[] args) {
+        try {
+            // This will throw IllegalStateException - missing required fields
+            EmbeddedExtension invalidExtension = EmbeddedExtension.builder()
+                .withId("invalid-ext")
+                // Missing name, version, and extensionMain
+                .build();
+        } catch (IllegalStateException e) {
+            System.err.println("Build failed: " + e.getMessage());
+        }
+        
+        try {
+            // This will succeed - all required fields present
+            EmbeddedExtension validExtension = EmbeddedExtension.builder()
+                .withId("valid-ext")
+                .withName("Valid Extension")
+                .withVersion("1.0.0")
+                .withExtensionMain(new ValidExtensionMain())
+                .build();
+            
+            System.out.println("Extension built successfully: " + validExtension.getName());
+        } catch (IllegalStateException e) {
+            System.err.println("Build failed: " + e.getMessage());
+        }
+    }
+    
+    private static class ValidExtensionMain implements ExtensionMain {
+        @Override
+        public void extensionStart(
+                @NotNull ExtensionStartInput input,
+                @NotNull ExtensionStartOutput output) {
+            // Extension logic
+        }
+        
+        @Override
+        public void extensionStop(
+                @NotNull ExtensionStopInput input,
+                @NotNull ExtensionStopOutput output) {
+            // Cleanup logic
+        }
+    }
+}
+```
+
+## Required vs Optional Parameters
+
+### Required Parameters
+
+The following parameters must be set before calling `build()`, or an `IllegalStateException` will be thrown:
+
+- `withId()` - Unique extension identifier
+- `withName()` - Human-readable name
+- `withVersion()` - Extension version
+- `withExtensionMain()` - Extension main class
+
+### Optional Parameters
+
+The following parameters have default values and are optional:
+
+- `withAuthor()` - Default: `null`
+- `withPriority()` - Default: `0`
+- `withStartPriority()` - Default: `1000`
+
+## See Also
+
+- [EmbeddedExtension](/embedded/api/embedded-extension) - The extension interface
+- [EmbeddedHiveMQBuilder](/embedded/api/embedded-hivemq-builder) - Add extensions to HiveMQ
+- [HiveMQ Extension SDK](https://www.hivemq.com/docs/extension-sdk/) - Complete extension development guide

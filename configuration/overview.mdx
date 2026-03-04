@@ -1,0 +1,122 @@
+---
+title: Configuration Overview
+description: Learn how to configure HiveMQ Community Edition using the config.xml file
+---
+
+HiveMQ Community Edition is configured through the `config.xml` file located in the `conf` directory of your HiveMQ installation.
+
+## Configuration File Location
+
+The main configuration file is located at:
+
+```
+<HIVEMQ_HOME>/conf/config.xml
+```
+
+## Configuration Structure
+
+The configuration file uses XML format with the following root structure:
+
+```xml
+<?xml version="1.0"?>
+<hivemq xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:noNamespaceSchemaLocation="config.xsd">
+    <!-- Configuration sections -->
+</hivemq>
+```
+
+## Main Configuration Sections
+
+The HiveMQ configuration is organized into the following sections:
+
+### Listeners
+
+Define network listeners for MQTT clients to connect. HiveMQ supports:
+- TCP listeners (port 1883 by default)
+- TLS/SSL TCP listeners (port 8883 by default)
+- WebSocket listeners (port 8000 by default)
+- TLS/SSL WebSocket listeners
+
+See [Listeners](/configuration/listeners) for detailed configuration.
+
+### MQTT Settings
+
+Configure MQTT protocol behavior including:
+- Message queuing and retention
+- Quality of Service (QoS) settings
+- Session and message expiry
+- Topic aliases and subscriptions
+- Keep-alive settings
+
+See [MQTT Settings](/configuration/mqtt-settings) for detailed configuration.
+
+### Security
+
+Configure security-related settings:
+- UTF-8 validation
+- Payload format validation
+- Client ID handling
+- Problem information requests
+
+See [Security](/configuration/security) for detailed configuration.
+
+### Persistence
+
+Configure data persistence mode:
+- File-based persistence (default)
+- In-memory persistence
+
+See [Persistence](/configuration/persistence) for detailed configuration.
+
+### Restrictions
+
+Set limits and restrictions:
+- Maximum connections
+- Client ID and topic length limits
+- Connection timeouts
+- Bandwidth throttling
+
+See [Restrictions](/configuration/restrictions) for detailed configuration.
+
+## Configuration Examples
+
+HiveMQ includes example configuration files in the `conf/examples/configuration` directory:
+
+- `config-sample-tcp-and-websockets.xml` - TCP and WebSocket listeners
+- `config-sample-mqtt.xml` - MQTT protocol settings
+- `config-sample-mqtt-tls.xml` - TLS/SSL configuration
+- `config-sample-websockets.xml` - WebSocket configuration
+
+## Minimal Configuration
+
+The minimal valid configuration includes at least one listener:
+
+```xml
+<?xml version="1.0"?>
+<hivemq>
+    <listeners>
+        <tcp-listener>
+            <port>1883</port>
+            <bind-address>0.0.0.0</bind-address>
+        </tcp-listener>
+    </listeners>
+</hivemq>
+```
+
+## Configuration Validation
+
+HiveMQ validates the configuration against the XML schema (`config.xsd`) on startup. If the configuration is invalid, HiveMQ will log detailed error messages and fail to start.
+
+## Applying Configuration Changes
+
+Configuration changes require a HiveMQ restart to take effect. HiveMQ does not support hot-reloading of the main configuration file.
+
+## Next Steps
+
+Explore the detailed configuration options for each section:
+
+- [Listeners](/configuration/listeners)
+- [MQTT Settings](/configuration/mqtt-settings)
+- [Security](/configuration/security)
+- [Persistence](/configuration/persistence)
+- [Restrictions](/configuration/restrictions)

@@ -1,0 +1,799 @@
+---
+title: Installation Guide
+description: Detailed installation instructions for HiveMQ Community Edition on all platforms
+---
+
+This guide provides comprehensive installation instructions for HiveMQ Community Edition across different platforms and deployment scenarios.
+
+## System Requirements
+
+### Java Requirements
+
+<Note>
+  **Runtime**: Java 11 or higher is required to run HiveMQ CE  
+  **Development**: Java 21 or higher is required to build from source and run tests
+</Note>
+
+Verify your Java installation:
+
+```bash
+java -version
+```
+
+If you need to install Java, we recommend [Eclipse Temurin](https://adoptium.net/temurin/releases) (formerly AdoptOpenJDK).
+
+### Hardware Requirements
+
+| Resource | Minimum | Recommended |
+|----------|---------|-------------|
+| **CPU** | 1 core | 2+ cores |
+| **Memory** | 512 MB RAM | 2 GB+ RAM |
+| **Disk Space** | 100 MB | 1 GB+ (for data persistence) |
+| **Network** | Port 1883 accessible | Multiple ports for TLS/WebSocket |
+
+### Supported Platforms
+
+- **Linux** (recommended for production)
+- **macOS**
+- **Windows**
+- **Docker**
+- **Any platform with Java 11+ support**
+
+## Installation Methods
+
+<Tabs>
+  <Tab title="Binary Package">
+
+### Download Binary Package
+
+This is the recommended method for most users.
+
+<Steps>
+
+<Step title="Download the Latest Release">
+
+Download HiveMQ CE version 2025.5:
+
+```bash
+wget https://github.com/hivemq/hivemq-community-edition/releases/download/2025.5/hivemq-ce-2025.5.zip
+```
+
+Or download manually from the [GitHub Releases page](https://github.com/hivemq/hivemq-community-edition/releases).
+
+</Step>
+
+<Step title="Extract the Archive">
+
+```bash Linux/macOS
+unzip hivemq-ce-2025.5.zip
+cd hivemq-ce-2025.5
+```
+
+```powershell Windows (PowerShell)
+Expand-Archive -Path hivemq-ce-2025.5.zip -DestinationPath .
+cd hivemq-ce-2025.5
+```
+
+</Step>
+
+<Step title="Verify Installation">
+
+Check the directory structure:
+
+```bash
+ls -la
+```
+
+You should see:
+- `bin/` - Startup scripts and JAR file
+- `conf/` - Configuration files
+- `data/` - Data persistence directory
+- `extensions/` - Extensions directory
+- `log/` - Log files
+
+</Step>
+
+<Step title="Start HiveMQ CE">
+
+<CodeGroup>
+
+```bash Linux/macOS
+./bin/run.sh
+```
+
+```batch Windows
+bin\run.bat
+```
+
+</CodeGroup>
+
+<Note>
+  On Windows, you may need to run the command prompt as Administrator for optimal performance.
+</Note>
+
+</Step>
+
+</Steps>
+
+### Directory Structure
+
+```
+hivemq-ce-2025.5/
+├── bin/
+│   ├── run.sh              # Linux/macOS startup script
+│   ├── run.bat             # Windows startup script
+│   ├── diagnostics.sh      # Diagnostics tool
+│   └── hivemq.jar          # Main application JAR
+├── conf/
+│   ├── config.xml          # Main configuration file
+│   ├── logback.xml         # Logging configuration
+│   └── examples/           # Configuration examples
+├── data/                   # Persistence data (created on first run)
+├── extensions/             # Extensions directory
+│   └── hivemq-allow-all-extension/  # Default extension
+├── log/                    # Log files (created on first run)
+└── third-party-licenses/   # License information
+```
+
+  </Tab>
+  
+  <Tab title="Docker">
+
+### Docker Installation
+
+HiveMQ CE is available as an official Docker image.
+
+<Steps>
+
+<Step title="Pull the Image">
+
+```bash
+docker pull hivemq/hivemq-ce:latest
+```
+
+For a specific version:
+
+```bash
+docker pull hivemq/hivemq-ce:2025.5
+```
+
+</Step>
+
+<Step title="Run HiveMQ CE">
+
+Basic usage:
+
+```bash
+docker run --name hivemq-ce -d -p 1883:1883 hivemq/hivemq-ce
+```
+
+</Step>
+
+<Step title="Advanced Configuration">
+
+With custom configuration and persistent storage:
+
+```bash
+docker run -d \
+  --name hivemq-ce \
+  -p 1883:1883 \
+  -p 8000:8000 \
+  -v /path/to/conf:/opt/hivemq/conf \
+  -v /path/to/data:/opt/hivemq/data \
+  -v /path/to/extensions:/opt/hivemq/extensions \
+  -e HIVEMQ_LOG_LEVEL=INFO \
+  hivemq/hivemq-ce
+```
+
+**Volume Mounts:**
+- `/opt/hivemq/conf` - Configuration files
+- `/opt/hivemq/data` - Persistent data
+- `/opt/hivemq/extensions` - Extensions
+- `/opt/hivemq/log` - Log files
+
+**Environment Variables:**
+- `HIVEMQ_LOG_LEVEL` - Set log level (TRACE, DEBUG, INFO, WARN, ERROR)
+- `HIVEMQ_JMX_ENABLED` - Enable/disable JMX (default: true)
+- `HIVEMQ_JMX_PORT` - JMX port (default: 9010)
+
+</Step>
+
+</Steps>
+
+### Docker Compose
+
+Create a `docker-compose.yml` file:
+
+```yaml
+version: '3.8'
+
+services:
+  hivemq:
+    image: hivemq/hivemq-ce:2025.5
+    container_name: hivemq-ce
+    ports:
+      - "1883:1883"      # MQTT
+      - "8000:8000"      # WebSocket
+      - "9010:9010"      # JMX
+    environment:
+      - HIVEMQ_LOG_LEVEL=INFO
+    volumes:
+      - ./conf:/opt/hivemq/conf
+      - ./data:/opt/hivemq/data
+      - ./extensions:/opt/hivemq/extensions
+      - ./log:/opt/hivemq/log
+    restart: unless-stopped
+```
+
+Run with:
+
+```bash
+docker compose up -d
+```
+
+  </Tab>
+  
+  <Tab title="Build from Source">
+
+### Build from Source
+
+Build HiveMQ CE from the source code.
+
+<Warning>
+  Building from source requires **Java 21 or higher**.
+</Warning>
+
+<Steps>
+
+<Step title="Clone Repository">
+
+```bash
+git clone https://github.com/hivemq/hivemq-community-edition.git
+cd hivemq-community-edition
+```
+
+</Step>
+
+<Step title="Build Binary Package">
+
+```bash
+./gradlew hivemqZip
+```
+
+The package will be created in `build/distributions/hivemq-ce-<version>.zip`.
+
+</Step>
+
+<Step title="Build Docker Image">
+
+To build a local Docker image:
+
+```bash
+./gradlew loadOciImage
+```
+
+This creates the image `hivemq/hivemq-ce:snapshot` locally.
+
+</Step>
+
+<Step title="Run Tests (Optional)">
+
+```bash
+./gradlew check
+```
+
+</Step>
+
+</Steps>
+
+### Gradle Tasks
+
+- `./gradlew hivemqZip` - Build ZIP distribution
+- `./gradlew loadOciImage` - Build Docker image
+- `./gradlew check` - Run all tests
+- `./gradlew test` - Run unit tests
+
+</Tab>
+  
+  <Tab title="Embedded Mode">
+
+### Embedded Mode
+
+Embed HiveMQ CE directly into your Java application.
+
+<Steps>
+
+<Step title="Add Dependency">
+
+**Maven:**
+
+```xml
+<dependency>
+    <groupId>com.hivemq</groupId>
+    <artifactId>hivemq-community-edition-embedded</artifactId>
+    <version>2025.5</version>
+</dependency>
+```
+
+**Gradle:**
+
+```groovy
+implementation 'com.hivemq:hivemq-community-edition-embedded:2025.5'
+```
+
+<Note>
+  Set your compiler version to Java 11 or higher.
+</Note>
+
+</Step>
+
+<Step title="Create Embedded Instance">
+
+```java
+import com.hivemq.embedded.EmbeddedHiveMQ;
+import java.nio.file.Path;
+
+public class EmbeddedExample {
+
+    public static void main(String[] args) {
+        final EmbeddedHiveMQ hivemq = EmbeddedHiveMQ.builder()
+            .withConfigurationFolder(Path.of("/path/to/config"))
+            .withDataFolder(Path.of("/path/to/data"))
+            .withExtensionsFolder(Path.of("/path/to/extensions"))
+            .build();
+
+        try {
+            hivemq.start().join();
+            System.out.println("HiveMQ CE started successfully!");
+            
+            // Your application logic here
+            
+        } catch (Exception e) {
+            e.printStackTrace();
+        } finally {
+            hivemq.stop().join();
+        }
+    }
+}
+```
+
+</Step>
+
+<Step title="Using Try-With-Resources">
+
+```java
+import com.hivemq.embedded.EmbeddedHiveMQ;
+
+public class EmbeddedExample {
+
+    public static void main(String[] args) {
+        try (final EmbeddedHiveMQ hivemq = EmbeddedHiveMQ.builder().build()) {
+            hivemq.start().join();
+            
+            // Your application logic
+            
+        } catch (Exception ex) {
+            ex.printStackTrace();
+        }
+    }
+}
+```
+
+<Note>
+  EmbeddedHiveMQ implements `AutoCloseable`. Always use try-with-resources or ensure `close()` is called.
+</Note>
+
+</Step>
+
+<Step title="Add Custom Extensions">
+
+```java
+import com.hivemq.embedded.EmbeddedExtension;
+import com.hivemq.extension.sdk.api.ExtensionMain;
+import com.hivemq.extension.sdk.api.parameter.*;
+
+final EmbeddedExtension extension = EmbeddedExtension.builder()
+    .withId("my-extension")
+    .withName("My Custom Extension")
+    .withVersion("1.0.0")
+    .withPriority(0)
+    .withStartPriority(1000)
+    .withAuthor("Your Name")
+    .withExtensionMain(new MyExtensionMain())
+    .build();
+
+final EmbeddedHiveMQ hivemq = EmbeddedHiveMQ.builder()
+    .withEmbeddedExtension(extension)
+    .build();
+```
+
+</Step>
+
+</Steps>
+
+### Excluding Dependencies
+
+If you need to reduce the size of your embedded deployment, you can exclude certain dependencies.
+
+#### Excluding RocksDB
+
+To exclude RocksDB persistence (uses file-based persistence instead):
+
+```xml Maven
+<dependency>
+    <groupId>com.hivemq</groupId>
+    <artifactId>hivemq-community-edition-embedded</artifactId>
+    <version>2025.5</version>
+    <exclusions>
+        <exclusion>
+            <groupId>org.rocksdb</groupId>
+            <artifactId>rocksdbjni</artifactId>
+        </exclusion>
+    </exclusions>
+</dependency>
+```
+
+**Configure persistence type:**
+
+```java
+import com.hivemq.configuration.service.InternalConfigurations;
+import com.hivemq.persistence.PersistenceType;
+
+InternalConfigurations.PAYLOAD_PERSISTENCE_TYPE.set(PersistenceType.FILE);
+InternalConfigurations.RETAINED_MESSAGE_PERSISTENCE_TYPE.set(PersistenceType.FILE);
+
+hivemq.start().join();
+```
+
+  </Tab>
+</Tabs>
+
+## Platform-Specific Instructions
+
+### Linux Installation
+
+<Steps>
+
+<Step title="Install Java">
+
+**Ubuntu/Debian:**
+```bash
+sudo apt update
+sudo apt install openjdk-11-jre
+```
+
+**RHEL/CentOS/Fedora:**
+```bash
+sudo yum install java-11-openjdk
+```
+
+</Step>
+
+<Step title="Create HiveMQ User (Optional)">
+
+```bash
+sudo useradd -r -s /bin/false hivemq
+```
+
+</Step>
+
+<Step title="Install HiveMQ CE">
+
+```bash
+cd /opt
+sudo wget https://github.com/hivemq/hivemq-community-edition/releases/download/2025.5/hivemq-ce-2025.5.zip
+sudo unzip hivemq-ce-2025.5.zip
+sudo chown -R hivemq:hivemq hivemq-ce-2025.5
+```
+
+</Step>
+
+<Step title="Create systemd Service">
+
+Create `/etc/systemd/system/hivemq.service`:
+
+```ini
+[Unit]
+Description=HiveMQ Community Edition
+After=network.target
+
+[Service]
+Type=simple
+User=hivemq
+Group=hivemq
+WorkingDirectory=/opt/hivemq-ce-2025.5
+ExecStart=/opt/hivemq-ce-2025.5/bin/run.sh
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Enable and start:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable hivemq
+sudo systemctl start hivemq
+sudo systemctl status hivemq
+```
+
+</Step>
+
+</Steps>
+
+### macOS Installation
+
+<Steps>
+
+<Step title="Install Java">
+
+Using Homebrew:
+
+```bash
+brew install openjdk@11
+```
+
+</Step>
+
+<Step title="Install HiveMQ CE">
+
+```bash
+cd ~/Applications
+wget https://github.com/hivemq/hivemq-community-edition/releases/download/2025.5/hivemq-ce-2025.5.zip
+unzip hivemq-ce-2025.5.zip
+cd hivemq-ce-2025.5
+```
+
+</Step>
+
+<Step title="Start HiveMQ CE">
+
+```bash
+./bin/run.sh
+```
+
+</Step>
+
+</Steps>
+
+### Windows Installation
+
+<Steps>
+
+<Step title="Install Java">
+
+Download and install Java from [Adoptium](https://adoptium.net/temurin/releases).
+
+</Step>
+
+<Step title="Extract HiveMQ CE">
+
+Extract `hivemq-ce-2025.5.zip` to `C:\hivemq-ce-2025.5`
+
+</Step>
+
+<Step title="Run as Administrator">
+
+Right-click Command Prompt and select "Run as Administrator":
+
+```batch
+cd C:\hivemq-ce-2025.5
+bin\run.bat
+```
+
+</Step>
+
+<Step title="Create Windows Service (Optional)">
+
+You can use tools like [NSSM](https://nssm.cc/) to run HiveMQ CE as a Windows service.
+
+</Step>
+
+</Steps>
+
+## Initial Configuration
+
+After installation, configure HiveMQ CE by editing `conf/config.xml`.
+
+### Basic Configuration
+
+The default configuration enables MQTT on port 1883:
+
+```xml
+<?xml version="1.0"?>
+<hivemq>
+    <listeners>
+        <tcp-listener>
+            <port>1883</port>
+            <bind-address>0.0.0.0</bind-address>
+        </tcp-listener>
+    </listeners>
+</hivemq>
+```
+
+### Add WebSocket Listener
+
+```xml
+<hivemq>
+    <listeners>
+        <tcp-listener>
+            <port>1883</port>
+            <bind-address>0.0.0.0</bind-address>
+        </tcp-listener>
+        
+        <websocket-listener>
+            <port>8000</port>
+            <bind-address>0.0.0.0</bind-address>
+            <path>/mqtt</path>
+            <subprotocols>
+                <subprotocol>mqttv3.1</subprotocol>
+                <subprotocol>mqtt</subprotocol>
+            </subprotocols>
+            <allow-extensions>false</allow-extensions>
+        </websocket-listener>
+    </listeners>
+</hivemq>
+```
+
+### Add TLS Listener
+
+```xml
+<tls-tcp-listener>
+    <port>8883</port>
+    <bind-address>0.0.0.0</bind-address>
+    <tls>
+        <keystore>
+            <path>/path/to/keystore.jks</path>
+            <password>keystore-password</password>
+            <private-key-password>key-password</private-key-password>
+        </keystore>
+        <truststore>
+            <path>/path/to/truststore.jks</path>
+            <password>truststore-password</password>
+        </truststore>
+        <client-authentication-mode>NONE</client-authentication-mode>
+    </tls>
+</tls-tcp-listener>
+```
+
+<Note>
+  Check the `conf/examples/` directory for more configuration examples.
+</Note>
+
+## Verifying Installation
+
+### Check HiveMQ is Running
+
+```bash
+netstat -an | grep 1883
+```
+
+You should see:
+```
+tcp        0      0 0.0.0.0:1883            0.0.0.0:*               LISTEN
+```
+
+### Test with Mosquitto Client
+
+```bash
+mosquitto_pub -h localhost -t test/topic -m "HiveMQ CE is running!"
+mosquitto_sub -h localhost -t test/topic
+```
+
+### Check Logs
+
+View the log files in the `log/` directory:
+
+```bash
+tail -f log/hivemq.log
+```
+
+## Firewall Configuration
+
+### Linux (UFW)
+
+```bash
+sudo ufw allow 1883/tcp comment 'HiveMQ MQTT'
+sudo ufw allow 8000/tcp comment 'HiveMQ WebSocket'
+sudo ufw allow 8883/tcp comment 'HiveMQ MQTT TLS'
+```
+
+### Linux (firewalld)
+
+```bash
+sudo firewall-cmd --permanent --add-port=1883/tcp
+sudo firewall-cmd --permanent --add-port=8000/tcp
+sudo firewall-cmd --permanent --add-port=8883/tcp
+sudo firewall-cmd --reload
+```
+
+### Windows Firewall
+
+```powershell
+New-NetFirewallRule -DisplayName "HiveMQ MQTT" -Direction Inbound -Protocol TCP -LocalPort 1883 -Action Allow
+New-NetFirewallRule -DisplayName "HiveMQ WebSocket" -Direction Inbound -Protocol TCP -LocalPort 8000 -Action Allow
+```
+
+## Performance Tuning
+
+### JVM Options
+
+Edit the startup script to customize JVM options:
+
+**Linux/macOS (`bin/run.sh`):**
+```bash
+JAVA_OPTS="$JAVA_OPTS -Xmx4g -Xms4g"
+```
+
+**Windows (`bin/run.bat`):**
+```batch
+set "JAVA_OPTS=%JAVA_OPTS% -Xmx4g -Xms4g"
+```
+
+### Recommended Settings for Production
+
+```bash
+JAVA_OPTS="-Xmx4g -Xms4g"
+JAVA_OPTS="$JAVA_OPTS -XX:+UseG1GC"
+JAVA_OPTS="$JAVA_OPTS -XX:MaxGCPauseMillis=100"
+JAVA_OPTS="$JAVA_OPTS -XX:+ParallelRefProcEnabled"
+```
+
+## Troubleshooting
+
+### Java Not Found
+
+**Error:** `ERROR! You do not have the Java Runtime Environment installed`
+
+**Solution:** Install Java 11 or higher and ensure it's in your PATH.
+
+### Insufficient Java Version
+
+**Error:** `ERROR! HiveMQ requires at least Java version 11`
+
+**Solution:** Update to Java 11 or higher.
+
+### Port Already in Use
+
+**Error:** Port 1883 is already in use
+
+**Solution:** 
+- Find the process using the port: `lsof -i :1883` (Linux/macOS) or `netstat -ano | findstr :1883` (Windows)
+- Change the port in `conf/config.xml`
+
+### Permission Denied (Linux)
+
+**Error:** Permission denied when starting HiveMQ
+
+**Solution:**
+```bash
+chmod +x bin/run.sh
+```
+
+### Heap Dump on OutOfMemory
+
+HiveMQ CE automatically creates heap dumps on OutOfMemoryError. Find them in the HiveMQ home directory:
+- `heap-dump.hprof`
+- `hs_err_pid<pid>.log`
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Configuration" icon="gear" href="/configuration">
+    Configure listeners, security, MQTT settings, and more
+  </Card>
+  
+  <Card title="Extensions" icon="puzzle-piece" href="/extensions">
+    Extend HiveMQ CE with custom functionality
+  </Card>
+  
+  <Card title="Monitoring" icon="chart-line" href="/operations/monitoring">
+    Monitor HiveMQ CE with JMX and metrics
+  </Card>
+  
+  <Card title="Security" icon="lock" href="/configuration/security">
+    Configure TLS, authentication, and authorization
+  </Card>
+</CardGroup>

@@ -1,0 +1,383 @@
+---
+title: Building from Source
+description: Build HiveMQ Community Edition from source code using Gradle
+---
+
+Build HiveMQ Community Edition from source to access the latest features, contribute to development, or customize the build process.
+
+## Prerequisites
+
+<Note>
+  **Java 21** is required to build and test HiveMQ, even though Java 11 is sufficient to run it.
+</Note>
+
+### Required Tools
+
+- **Java Development Kit (JDK) 21**: Download from [Eclipse Temurin](https://adoptium.net/temurin/releases)
+- **Git**: For cloning the repository
+- **Gradle**: Included via Gradle Wrapper (`gradlew`)
+
+Verify your Java installation:
+
+```bash
+java -version
+```
+
+Expected output:
+
+```
+openjdk version "21.0.x" 2024-xx-xx
+```
+
+## Clone the Repository
+
+Clone the HiveMQ Community Edition repository from GitHub:
+
+```bash
+git clone https://github.com/hivemq/hivemq-community-edition.git
+cd hivemq-community-edition
+```
+
+## Build Targets
+
+HiveMQ uses Gradle as its build system. The project includes several build targets for different outputs.
+
+### Build the Binary Package
+
+Create a distributable ZIP package:
+
+```bash
+./gradlew hivemqZip
+```
+
+**Output**: `build/distributions/hivemq-ce-<version>.zip`
+
+This creates a complete HiveMQ distribution including:
+- Executable JAR (`hivemq.jar`)
+- Startup scripts (`run.sh`, `run.bat`)
+- Configuration files
+- Directory structure
+- Software Bill of Materials (SBOM)
+
+### Extract and Run
+
+After building, extract and run HiveMQ:
+
+```bash
+cd build/distributions
+unzip hivemq-ce-*.zip
+cd hivemq-ce-*/
+./bin/run.sh
+```
+
+## Build the Docker Image
+
+Build a local Docker image:
+
+```bash
+./gradlew loadOciImage
+```
+
+**Output**: Docker image `hivemq/hivemq-ce:snapshot`
+
+Run the locally built image:
+
+```bash
+docker run --name hivemq-ce -d -p 1883:1883 hivemq/hivemq-ce:snapshot
+```
+
+## Other Build Tasks
+
+### Compile Sources
+
+Compile the Java sources without creating a distribution:
+
+```bash
+./gradlew compileJava
+```
+
+<Info>
+  HiveMQ compiles to Java 11 bytecode for runtime compatibility, even though the build requires Java 21.
+</Info>
+
+### Build JAR File
+
+Create the HiveMQ JAR:
+
+```bash
+./gradlew shadowJar
+```
+
+**Output**: `build/libs/hivemq-community-edition-<version>-all.jar`
+
+The shadow JAR includes all dependencies merged into a single executable JAR.
+
+### Run Tests
+
+Execute the test suite:
+
+```bash
+./gradlew test
+```
+
+Test requirements:
+- Minimum heap: 128m
+- Maximum heap: 2048m
+- Special JVM flags for module access
+
+View test results at `build/reports/tests/test/index.html`
+
+### Generate Javadoc
+
+Generate API documentation:
+
+```bash
+./gradlew javadoc
+```
+
+**Output**: `build/docs/javadoc/`
+
+### Code Quality Checks
+
+Run code formatting and quality checks:
+
+```bash
+# Check code formatting
+./gradlew spotlessCheck
+
+# Apply code formatting
+./gradlew spotlessApply
+
+# Run forbidden API checks
+./gradlew forbiddenApisMain
+
+# Generate code coverage report
+./gradlew test jacocoTestReport
+```
+
+Coverage report: `build/reports/jacoco/test/html/index.html`
+
+## Build Configuration
+
+### Project Information
+
+- **Group**: `com.hivemq`
+- **Artifact ID**: `hivemq-community-edition`
+- **License**: Apache 2.0
+- **Main Class**: `com.hivemq.HiveMQServer`
+
+### Java Toolchain
+
+The build uses a sophisticated toolchain setup:
+
+```kotlin
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)  // Build requires Java 21
+    }
+}
+
+tasks.compileJava {
+    javaCompiler = javaToolchains.compilerFor {
+        languageVersion = JavaLanguageVersion.of(11)  // Compile to Java 11 bytecode
+    }
+}
+```
+
+## Key Dependencies
+
+<AccordionGroup>
+  <Accordion title="Networking">
+    - Netty (buffer, codec, handler, transport)
+    - High-performance async I/O framework
+  </Accordion>
+  
+  <Accordion title="Persistence">
+    - RocksDB: High-performance embedded database
+    - Xodus: Transactional schema-less embedded database
+  </Accordion>
+  
+  <Accordion title="Security">
+    - Bouncy Castle (provider, PKIX)
+    - Cryptography and TLS support
+  </Accordion>
+  
+  <Accordion title="Logging">
+    - SLF4J API
+    - Logback Classic
+    - JUL to SLF4J bridge
+  </Accordion>
+  
+  <Accordion title="Metrics">
+    - Dropwizard Metrics (core, JMX, Logback)
+    - OSHI (system and hardware information)
+  </Accordion>
+  
+  <Accordion title="Dependency Injection">
+    - Google Guice
+    - JSR-330 (javax.inject)
+  </Accordion>
+</AccordionGroup>
+
+## Gradle Wrapper
+
+The project includes Gradle Wrapper for consistent builds:
+
+```bash
+# Linux/macOS
+./gradlew <task>
+
+# Windows
+gradlew.bat <task>
+```
+
+<Tip>
+  Always use the Gradle Wrapper (`./gradlew`) instead of a system-installed Gradle to ensure version compatibility.
+</Tip>
+
+## Common Build Tasks
+
+```bash
+# Clean build artifacts
+./gradlew clean
+
+# Full build with tests
+./gradlew build
+
+# Build without tests
+./gradlew assemble
+
+# List all available tasks
+./gradlew tasks
+
+# View task dependencies
+./gradlew tasks --all
+```
+
+## Continuous Integration
+
+The project uses GitHub Actions for CI/CD. See `.github/workflows/check.yml` for the complete workflow.
+
+## Publishing
+
+### Maven Publications
+
+Two artifacts are published:
+
+1. **Distribution**: `hivemq-community-edition` (ZIP package)
+2. **Embedded**: `hivemq-community-edition-embedded` (JAR for embedded use)
+
+```bash
+# Publish to local Maven repository
+./gradlew publishToMavenLocal
+```
+
+### Signing
+
+Artifacts are signed with PGP:
+
+```bash
+# Disable signing (development)
+./gradlew publish -PsigningDisabled=true
+```
+
+## Development Workflow
+
+<Steps>
+  <Step title="Clone and checkout a branch">
+    ```bash
+    git clone https://github.com/hivemq/hivemq-community-edition.git
+    cd hivemq-community-edition
+    git checkout -b feature/my-feature
+    ```
+  </Step>
+  
+  <Step title="Make your changes">
+    Edit source files in `src/main/java/`
+  </Step>
+  
+  <Step title="Format code">
+    ```bash
+    ./gradlew spotlessApply
+    ```
+  </Step>
+  
+  <Step title="Run tests">
+    ```bash
+    ./gradlew test
+    ```
+  </Step>
+  
+  <Step title="Build and verify">
+    ```bash
+    ./gradlew hivemqZip
+    ```
+  </Step>
+  
+  <Step title="Commit and push">
+    ```bash
+    git add .
+    git commit -m "Description of changes"
+    git push origin feature/my-feature
+    ```
+  </Step>
+</Steps>
+
+## Troubleshooting
+
+### Build Fails with Java Version Error
+
+**Problem**: `Unsupported class file major version`
+
+**Solution**: Ensure you're using Java 21 for building:
+
+```bash
+export JAVA_HOME=/path/to/java-21
+./gradlew clean build
+```
+
+### Out of Memory During Build
+
+**Problem**: `OutOfMemoryError` during compilation or tests
+
+**Solution**: Increase Gradle JVM memory:
+
+```bash
+export GRADLE_OPTS="-Xmx4g"
+./gradlew build
+```
+
+Or add to `gradle.properties`:
+
+```properties
+org.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=512m
+```
+
+### Test Failures
+
+**Problem**: Specific tests fail on your system
+
+**Solution**: Use test inclusion/exclusion files:
+
+```bash
+# Create exclusions.txt with test patterns to exclude
+echo "**/FailingTest.class" > exclusions.txt
+./gradlew test
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Contributing" icon="code-pull-request" href="https://github.com/hivemq/hivemq-community-edition/blob/master/CONTRIBUTING.md">
+    Read the contribution guidelines
+  </Card>
+  <Card title="Binary Deployment" icon="box" href="/deployment/binary">
+    Deploy the built package
+  </Card>
+  <Card title="Extension Development" icon="puzzle-piece" href="/extensions/extension-sdk">
+    Develop custom extensions
+  </Card>
+  <Card title="Testing" icon="flask" href="/deployment/building-from-source">
+    Write and run tests
+  </Card>
+</CardGroup>

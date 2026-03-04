@@ -1,0 +1,329 @@
+---
+title: "MQTT 3.1 and 3.1.1"
+description: "MQTT 3.x protocol features supported by HiveMQ CE"
+---
+
+## Overview
+
+MQTT 3.1.1 is the most widely adopted version of the MQTT protocol, standardized by OASIS in 2014. HiveMQ CE provides full support for both MQTT 3.1 and 3.1.1, ensuring compatibility with the vast majority of MQTT clients and devices.
+
+<Info>
+  MQTT 3.1.1 refined and clarified the MQTT 3.1 specification without introducing breaking changes. HiveMQ CE supports both versions seamlessly.
+</Info>
+
+## Core Protocol Features
+
+### Quality of Service (QoS)
+
+MQTT 3.1.1 defines three QoS levels for message delivery:
+
+| QoS Level | Name | Guarantee | Use Case |
+|-----------|------|-----------|----------|
+| **0** | At most once | No guarantee | Sensor data where loss is acceptable |
+| **1** | At least once | Guaranteed delivery, duplicates possible | Important messages where duplicates can be handled |
+| **2** | Exactly once | Guaranteed once, no duplicates | Critical commands, financial transactions |
+
+```python
+import paho.mqtt.client as mqtt
+
+client = mqtt.Client()
+client.connect("localhost", 1883, 60)
+
+# QoS 0: Fire and forget
+client.publish("sensor/temperature", "22.5", qos=0)
+
+# QoS 1: Acknowledged delivery
+client.publish("command/device1", "start", qos=1)
+
+# QoS 2: Exactly once
+client.publish("payment/transaction", '{"amount": 100}', qos=2)
+```
+
+### Retained Messages
+
+Retained messages are stored by the broker and delivered to new subscribers immediately upon subscription.
+
+```python
+# Publish a retained message
+client.publish("device/status", "online", retain=True)
+
+# New subscribers immediately receive the last retained message
+client.subscribe("device/status")
+```
+
+**Use cases:**
+- Last known device status
+- Configuration values
+- System state information
+
+<Warning>
+  To delete a retained message, publish an empty message with the retain flag set to the same topic.
+</Warning>
+
+### Persistent Sessions (Clean Session = False)
+
+When `clean_session` is set to `False`, the broker maintains:
+
+- The client's subscriptions
+- QoS 1 and QoS 2 messages not yet acknowledged
+- New QoS 1 and QoS 2 messages while disconnected
+
+```python
+# Create a persistent session
+client = mqtt.Client(client_id="device123", clean_session=False)
+client.connect("localhost", 1883, 60)
+
+# Subscribe with QoS 1
+client.subscribe("commands/device123", qos=1)
+
+# Even if disconnected, messages are queued by HiveMQ CE
+```
+
+<Note>
+  HiveMQ CE stores queued messages in persistent storage (RocksDB) to survive broker restarts.
+</Note>
+
+### Last Will and Testament (LWT)
+
+LWT allows clients to specify a message that the broker will publish if the client disconnects ungracefully.
+
+```python
+import paho.mqtt.client as mqtt
+
+client = mqtt.Client()
+
+# Set Last Will message
+client.will_set(
+    topic="devices/device123/status",
+    payload="offline",
+    qos=1,
+    retain=True
+)
+
+client.connect("localhost", 1883, 60)
+```
+
+**Use cases:**
+- Device status monitoring
+- Detecting unexpected disconnections
+- Alerting systems
+
+## MQTT 3.1.1 Packet Types
+
+| Packet Type | Direction | Description |
+|-------------|-----------|-------------|
+| **CONNECT** | Client → Broker | Initial connection request |
+| **CONNACK** | Broker → Client | Connection acknowledgment |
+| **PUBLISH** | Bidirectional | Publish a message |
+| **PUBACK** | Bidirectional | QoS 1 acknowledgment |
+| **PUBREC** | Bidirectional | QoS 2 received (part 1) |
+| **PUBREL** | Bidirectional | QoS 2 release (part 2) |
+| **PUBCOMP** | Bidirectional | QoS 2 complete (part 3) |
+| **SUBSCRIBE** | Client → Broker | Subscribe to topics |
+| **SUBACK** | Broker → Client | Subscribe acknowledgment |
+| **UNSUBSCRIBE** | Client → Broker | Unsubscribe from topics |
+| **UNSUBACK** | Broker → Client | Unsubscribe acknowledgment |
+| **PINGREQ** | Client → Broker | Keep-alive ping |
+| **PINGRESP** | Broker → Client | Keep-alive response |
+| **DISCONNECT** | Client → Broker | Graceful disconnection |
+
+## Topic Structure
+
+### Topic Naming
+
+- Use UTF-8 encoded strings
+- Maximum length: 65535 bytes (configurable in HiveMQ CE)
+- Hierarchical structure using `/` as delimiter
+- Case-sensitive
+
+**Best practices:**
+```
+✅ Good topic structure:
+home/livingroom/temperature
+home/bedroom/humidity
+factory/line1/machine5/status
+
+❌ Avoid:
+/leading/slash/topic      # Leading slash adds empty level
+topic//double//slash      # Empty levels
+topic with spaces          # Spaces can cause issues
+```
+
+### Topic Wildcards
+
+#### Single-level Wildcard (+)
+
+Matches exactly one topic level:
+
+```python
+# Subscribe to temperature sensors in all rooms
+client.subscribe("home/+/temperature")
+
+# Matches:
+# ✅ home/livingroom/temperature
+# ✅ home/bedroom/temperature
+# ❌ home/livingroom/humidity
+# ❌ home/bedroom/sensors/temperature
+```
+
+#### Multi-level Wildcard (#)
+
+Matches one or more topic levels (must be last character):
+
+```python
+# Subscribe to all topics under home
+client.subscribe("home/#")
+
+# Matches:
+# ✅ home/livingroom/temperature
+# ✅ home/bedroom/humidity
+# ✅ home/livingroom/sensors/temp1
+# ✅ home
+```
+
+<Warning>
+  Avoid subscribing to `#` (all topics) in production as it can cause performance issues.
+</Warning>
+
+## Connection Parameters
+
+### Client Identifier
+
+- Unique identifier for the client
+- 1-23 characters in MQTT 3.1
+- 1-65535 characters in MQTT 3.1.1
+- Can be empty in MQTT 3.1.1 (broker assigns ID)
+
+```python
+# Explicit client ID
+client = mqtt.Client(client_id="device123")
+
+# Empty client ID (broker assigns ID, clean_session must be True)
+client = mqtt.Client(client_id="", clean_session=True)
+```
+
+### Keep-Alive
+
+- Maximum time interval between messages
+- Default: 60 seconds
+- Range: 0-65535 seconds
+- 0 = keep-alive disabled
+
+```python
+client = mqtt.Client()
+# Connect with 120-second keep-alive
+client.connect("localhost", 1883, keepalive=120)
+```
+
+### Authentication
+
+MQTT 3.1.1 supports username/password authentication:
+
+```python
+client = mqtt.Client()
+client.username_pw_set(username="device123", password="secret")
+client.connect("localhost", 1883, 60)
+```
+
+<Note>
+  Use TLS/SSL encryption to protect credentials in transit. See [TLS Transport](/mqtt/transports/tls) guide.
+</Note>
+
+## MQTT 3.1.1 Limitations
+
+Compared to MQTT 5, version 3.1.1 lacks:
+
+- ❌ Reason codes (only basic error indicators)
+- ❌ User properties (custom metadata)
+- ❌ Request/response pattern
+- ❌ Topic aliases
+- ❌ Shared subscriptions (HiveMQ extension available)
+- ❌ Subscription options
+- ❌ Message expiry
+- ❌ Server-sent DISCONNECT
+
+<Tip>
+  Consider upgrading to MQTT 5 for new projects to take advantage of enhanced features and better error handling.
+</Tip>
+
+## Complete Connection Example
+
+```python
+import paho.mqtt.client as mqtt
+import time
+
+def on_connect(client, userdata, flags, rc):
+    if rc == 0:
+        print("Connected successfully")
+        # Subscribe after connection
+        client.subscribe("sensors/#", qos=1)
+    else:
+        print(f"Connection failed with code {rc}")
+
+def on_message(client, userdata, message):
+    print(f"Received: {message.topic} = {message.payload.decode()}")
+
+def on_disconnect(client, userdata, rc):
+    if rc != 0:
+        print(f"Unexpected disconnect: {rc}")
+
+# Create client with persistent session
+client = mqtt.Client(
+    client_id="sensor_device_1",
+    clean_session=False,
+    protocol=mqtt.MQTTv311
+)
+
+# Set callbacks
+client.on_connect = on_connect
+client.on_message = on_message
+client.on_disconnect = on_disconnect
+
+# Set authentication
+client.username_pw_set("device1", "password123")
+
+# Set Last Will
+client.will_set(
+    "devices/sensor_device_1/status",
+    "offline",
+    qos=1,
+    retain=True
+)
+
+# Connect to HiveMQ CE
+client.connect("localhost", 1883, keepalive=60)
+
+# Publish online status
+client.publish("devices/sensor_device_1/status", "online", qos=1, retain=True)
+
+# Start network loop
+client.loop_start()
+
+# Publish sensor data
+for i in range(10):
+    temperature = 20 + i * 0.5
+    client.publish("sensors/temperature", str(temperature), qos=1)
+    time.sleep(2)
+
+# Graceful disconnect
+client.publish("devices/sensor_device_1/status", "offline", qos=1, retain=True)
+client.disconnect()
+client.loop_stop()
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="MQTT 5" icon="star" href="/mqtt/mqtt5">
+    Explore MQTT 5.0 enhanced features
+  </Card>
+  <Card title="Quality of Service" icon="shield" href="/mqtt/guides/quality-of-service">
+    Deep dive into QoS levels
+  </Card>
+  <Card title="Connecting Clients" icon="plug" href="/mqtt/guides/connecting-clients">
+    Client connection examples
+  </Card>
+  <Card title="Transport Protocols" icon="network-wired" href="/mqtt/transports/tcp">
+    Configure TCP and TLS transports
+  </Card>
+</CardGroup>

@@ -1,0 +1,412 @@
+---
+title: "Dependency Exclusions"
+description: "Exclude optional dependencies from HiveMQ Community Edition Embedded Mode"
+---
+
+When deploying an application with Embedded HiveMQ, you can exclude certain dependencies to reduce the application size or avoid conflicts with your existing dependencies.
+
+## Common Exclusions
+
+Two common dependencies that can be safely excluded under certain conditions:
+
+1. **RocksDB** (`org.rocksdb:rocksdbjni`) - When using Xodus persistence instead
+2. **Logback** (`ch.qos.logback:logback-classic`) - When using a different logging framework
+
+## Excluding RocksDB
+
+RocksDB is a native library that provides high-performance persistence. If you plan to use Xodus persistence instead, you can exclude the RocksDB dependency.
+
+### Maven Exclusion
+
+Use the Maven Shade Plugin to exclude RocksDB:
+
+```xml pom.xml
+<project>
+    <dependencies>
+        <dependency>
+            <groupId>com.hivemq</groupId>
+            <artifactId>hivemq-community-edition-embedded</artifactId>
+            <version>2025.5</version>
+        </dependency>
+    </dependencies>
+    
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-shade-plugin</artifactId>
+                <version>3.2.1</version>
+                <executions>
+                    <execution>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>shade</goal>
+                        </goals>
+                        <configuration>
+                            <artifactSet>
+                                <excludes>
+                                    <!-- Exclude RocksDB -->
+                                    <exclude>org.rocksdb:rocksdbjni</exclude>
+                                </excludes>
+                            </artifactSet>
+                            <filters>
+                                <filter>
+                                    <artifact>*:*</artifact>
+                                    <excludes>
+                                        <exclude>META-INF/*.SF</exclude>
+                                        <exclude>META-INF/*.DSA</exclude>
+                                        <exclude>META-INF/*.RSA</exclude>
+                                    </excludes>
+                                </filter>
+                            </filters>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>
+```
+
+### Required Configuration Changes
+
+When excluding RocksDB, you **must** configure HiveMQ to use file-based (Xodus) persistence **before** calling `start()`:
+
+```java
+import com.hivemq.configuration.service.InternalConfigurations;
+import com.hivemq.embedded.EmbeddedHiveMQ;
+import com.hivemq.migration.meta.PersistenceType;
+
+public class WithoutRocksDB {
+    public static void main(String[] args) {
+        try (EmbeddedHiveMQ hivemq = EmbeddedHiveMQ.builder().build()) {
+            
+            // Required: Set persistence to FILE (Xodus) instead of FILE_NATIVE (RocksDB)
+            InternalConfigurations.PAYLOAD_PERSISTENCE_TYPE.set(PersistenceType.FILE);
+            InternalConfigurations.RETAINED_MESSAGE_PERSISTENCE_TYPE.set(PersistenceType.FILE);
+            
+            hivemq.start().join();
+            System.out.println("HiveMQ started without RocksDB");
+            
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+}
+```
+
+<Warning>
+If you exclude RocksDB but don't set the persistence type to `FILE`, HiveMQ will fail to start with a `ClassNotFoundException` for RocksDB classes.
+</Warning>
+
+### Gradle Exclusion
+
+With Gradle, you can exclude RocksDB directly in the dependency declaration:
+
+```groovy build.gradle
+dependencies {
+    implementation('com.hivemq:hivemq-community-edition-embedded:2025.5') {
+        exclude group: 'org.rocksdb', module: 'rocksdbjni'
+    }
+}
+```
+
+Or in Kotlin DSL:
+
+```kotlin build.gradle.kts
+dependencies {
+    implementation("com.hivemq:hivemq-community-edition-embedded:2025.5") {
+        exclude(group = "org.rocksdb", module = "rocksdbjni")
+    }
+}
+```
+
+## Excluding Logback
+
+If your application uses a different logging framework (e.g., Log4j2, SLF4J with another backend), you can exclude Logback.
+
+### Maven Exclusion
+
+```xml pom.xml
+<project>
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-shade-plugin</artifactId>
+                <version>3.2.1</version>
+                <executions>
+                    <execution>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>shade</goal>
+                        </goals>
+                        <configuration>
+                            <artifactSet>
+                                <excludes>
+                                    <!-- Exclude Logback -->
+                                    <exclude>ch.qos.logback:logback-classic</exclude>
+                                </excludes>
+                            </artifactSet>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>
+```
+
+### Required Configuration Changes
+
+When excluding Logback, you **must** disable HiveMQ's logging bootstrap:
+
+```java
+import com.hivemq.embedded.EmbeddedHiveMQ;
+
+public class WithoutLogback {
+    public static void main(String[] args) {
+        try (EmbeddedHiveMQ hivemq = EmbeddedHiveMQ.builder()
+                .withoutLoggingBootstrap()  // Disable HiveMQ's logging
+                .build()) {
+            
+            hivemq.start().join();
+            System.out.println("HiveMQ started with custom logging");
+            
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+}
+```
+
+### Gradle Exclusion
+
+```groovy build.gradle
+dependencies {
+    implementation('com.hivemq:hivemq-community-edition-embedded:2025.5') {
+        exclude group: 'ch.qos.logback', module: 'logback-classic'
+    }
+}
+```
+
+## Excluding Both RocksDB and Logback
+
+### Maven Configuration
+
+```xml pom.xml
+<project>
+    <dependencies>
+        <dependency>
+            <groupId>com.hivemq</groupId>
+            <artifactId>hivemq-community-edition-embedded</artifactId>
+            <version>2025.5</version>
+        </dependency>
+    </dependencies>
+    
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-shade-plugin</artifactId>
+                <version>3.2.1</version>
+                <executions>
+                    <execution>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>shade</goal>
+                        </goals>
+                        <configuration>
+                            <artifactSet>
+                                <excludes>
+                                    <!-- Exclude RocksDB -->
+                                    <exclude>org.rocksdb:rocksdbjni</exclude>
+                                    <!-- Exclude Logback -->
+                                    <exclude>ch.qos.logback:logback-classic</exclude>
+                                </excludes>
+                            </artifactSet>
+                            <filters>
+                                <filter>
+                                    <artifact>*:*</artifact>
+                                    <excludes>
+                                        <exclude>META-INF/*.SF</exclude>
+                                        <exclude>META-INF/*.DSA</exclude>
+                                        <exclude>META-INF/*.RSA</exclude>
+                                    </excludes>
+                                </filter>
+                            </filters>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>
+```
+
+### Java Configuration
+
+```java
+import com.hivemq.configuration.service.InternalConfigurations;
+import com.hivemq.embedded.EmbeddedHiveMQ;
+import com.hivemq.migration.meta.PersistenceType;
+
+public class MinimalDependencies {
+    public static void main(String[] args) {
+        try (EmbeddedHiveMQ hivemq = EmbeddedHiveMQ.builder()
+                .withoutLoggingBootstrap()  // No Logback
+                .build()) {
+            
+            // Use Xodus instead of RocksDB
+            InternalConfigurations.PAYLOAD_PERSISTENCE_TYPE.set(PersistenceType.FILE);
+            InternalConfigurations.RETAINED_MESSAGE_PERSISTENCE_TYPE.set(PersistenceType.FILE);
+            
+            hivemq.start().join();
+            System.out.println("HiveMQ started with minimal dependencies");
+            
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+}
+```
+
+### Gradle Configuration
+
+```groovy build.gradle
+dependencies {
+    implementation('com.hivemq:hivemq-community-edition-embedded:2025.5') {
+        exclude group: 'org.rocksdb', module: 'rocksdbjni'
+        exclude group: 'ch.qos.logback', module: 'logback-classic'
+    }
+}
+```
+
+## Complete Example
+
+Here's a complete example that excludes both RocksDB and Logback:
+
+### Maven pom.xml
+
+```xml pom.xml
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+         http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    
+    <groupId>com.example</groupId>
+    <artifactId>hivemq-embedded-minimal</artifactId>
+    <version>1.0.0</version>
+    
+    <properties>
+        <maven.compiler.source>11</maven.compiler.source>
+        <maven.compiler.target>11</maven.compiler.target>
+    </properties>
+    
+    <dependencies>
+        <dependency>
+            <groupId>com.hivemq</groupId>
+            <artifactId>hivemq-community-edition-embedded</artifactId>
+            <version>2025.5</version>
+        </dependency>
+        
+        <!-- Your preferred logging framework -->
+        <dependency>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-slf4j-impl</artifactId>
+            <version>2.20.0</version>
+        </dependency>
+    </dependencies>
+    
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-shade-plugin</artifactId>
+                <version>3.2.1</version>
+                <executions>
+                    <execution>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>shade</goal>
+                        </goals>
+                        <configuration>
+                            <artifactSet>
+                                <excludes>
+                                    <exclude>org.rocksdb:rocksdbjni</exclude>
+                                    <exclude>ch.qos.logback:logback-classic</exclude>
+                                </excludes>
+                            </artifactSet>
+                            <filters>
+                                <filter>
+                                    <artifact>*:*</artifact>
+                                    <excludes>
+                                        <exclude>META-INF/*.SF</exclude>
+                                        <exclude>META-INF/*.DSA</exclude>
+                                        <exclude>META-INF/*.RSA</exclude>
+                                    </excludes>
+                                </filter>
+                            </filters>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>
+```
+
+### Java Application
+
+```java Main.java
+import com.hivemq.configuration.service.InternalConfigurations;
+import com.hivemq.embedded.EmbeddedHiveMQ;
+import com.hivemq.migration.meta.PersistenceType;
+import java.nio.file.Path;
+
+public class Main {
+    public static void main(String[] args) {
+        try (EmbeddedHiveMQ hivemq = EmbeddedHiveMQ.builder()
+                .withDataFolder(Path.of("/tmp/hivemq-data"))
+                .withoutLoggingBootstrap()  // Using Log4j2 instead
+                .build()) {
+            
+            // Configure Xodus persistence (no RocksDB)
+            InternalConfigurations.PAYLOAD_PERSISTENCE_TYPE.set(PersistenceType.FILE);
+            InternalConfigurations.RETAINED_MESSAGE_PERSISTENCE_TYPE.set(PersistenceType.FILE);
+            
+            // Start the broker
+            hivemq.start().join();
+            System.out.println("HiveMQ started with minimal dependencies");
+            
+            // Keep running
+            Thread.currentThread().join();
+            
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+}
+```
+
+## Exclusion Summary
+
+| Dependency | When to Exclude | Required Changes |
+|------------|----------------|------------------|
+| **RocksDB** | Using Xodus persistence only | Set `PAYLOAD_PERSISTENCE_TYPE` and `RETAINED_MESSAGE_PERSISTENCE_TYPE` to `PersistenceType.FILE` |
+| **Logback** | Using different logging framework | Call `withoutLoggingBootstrap()` on builder |
+
+## Benefits of Excluding Dependencies
+
+- **Smaller Application Size**: Reduce the final JAR/WAR size
+- **Avoid Conflicts**: Prevent dependency conflicts with your existing libraries
+- **Simplified Deployment**: Fewer dependencies to manage and update
+- **Platform Compatibility**: Avoid native libraries if deploying to restricted environments
+
+## See Also
+
+- [Persistence Configuration](/embedded/advanced/persistence) - Learn about persistence types
+- [Configuration](/embedded/advanced/configuration) - General configuration options
+- [Maven Shade Plugin](https://maven.apache.org/plugins/maven-shade-plugin/) - Official documentation

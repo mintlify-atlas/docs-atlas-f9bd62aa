@@ -1,0 +1,299 @@
+---
+title: "EmbeddedHiveMQ"
+description: "API reference for the EmbeddedHiveMQ interface"
+---
+
+The `EmbeddedHiveMQ` interface represents a running instance of HiveMQ broker in embedded mode.
+
+## Package
+
+```java
+com.hivemq.embedded.EmbeddedHiveMQ
+```
+
+## Interface Declaration
+
+```java
+public interface EmbeddedHiveMQ extends AutoCloseable
+```
+
+<Note>
+`EmbeddedHiveMQ` implements `AutoCloseable`, making it compatible with try-with-resources statements.
+</Note>
+
+## Thread Safety
+
+This interface is thread-safe and can be safely accessed from multiple threads.
+
+## Methods
+
+### builder()
+
+Creates a new `EmbeddedHiveMQBuilder` instance.
+
+```java
+static @NotNull EmbeddedHiveMQBuilder builder()
+```
+
+**Returns:**
+- `EmbeddedHiveMQBuilder` - A new builder instance for creating an `EmbeddedHiveMQ`
+
+**Example:**
+
+```java
+EmbeddedHiveMQBuilder builder = EmbeddedHiveMQ.builder();
+```
+
+---
+
+### start()
+
+Starts the embedded HiveMQ broker.
+
+```java
+@NotNull CompletableFuture<Void> start()
+```
+
+**Returns:**
+- `CompletableFuture<Void>` - A future that completes when HiveMQ is started and ready to accept connections
+
+**Behavior:**
+- This method is **idempotent**. Calling `start()` on an already started instance has no effect.
+- A stopped `EmbeddedHiveMQ` can be restarted with this method.
+- If no enduring persistence type (such as file persistence) is configured, the restarted broker does not retain its state.
+
+**Example:**
+
+```java
+// Synchronous start
+hivemq.start().join();
+
+// Asynchronous start
+hivemq.start().thenRun(() -> {
+    System.out.println("HiveMQ is ready");
+});
+
+// With error handling
+hivemq.start()
+    .thenRun(() -> System.out.println("Started successfully"))
+    .exceptionally(throwable -> {
+        System.err.println("Failed to start: " + throwable.getMessage());
+        return null;
+    });
+```
+
+---
+
+### stop()
+
+Stops the embedded HiveMQ broker.
+
+```java
+@NotNull CompletableFuture<Void> stop()
+```
+
+**Returns:**
+- `CompletableFuture<Void>` - A future that completes when HiveMQ is stopped
+
+**Behavior:**
+- This method is **idempotent**. Calling `stop()` on an already stopped instance has no effect.
+- Calling `stop()` clears the metric registry returned by `getMetricRegistry()`.
+- A stopped `EmbeddedHiveMQ` can be restarted with the `start()` method.
+- If no enduring persistence type is configured, the restarted broker does not retain its state.
+
+**Example:**
+
+```java
+// Synchronous stop
+hivemq.stop().join();
+
+// Asynchronous stop
+hivemq.stop().thenRun(() -> {
+    System.out.println("HiveMQ stopped");
+});
+
+// Graceful shutdown with timeout
+try {
+    hivemq.stop().get(30, TimeUnit.SECONDS);
+} catch (TimeoutException e) {
+    System.err.println("Shutdown timed out");
+}
+```
+
+---
+
+### getMetricRegistry()
+
+Provides access to the HiveMQ metric registry.
+
+```java
+@NotNull MetricRegistry getMetricRegistry()
+```
+
+**Returns:**
+- `MetricRegistry` - The Dropwizard Metrics registry containing all HiveMQ metrics
+
+**Behavior:**
+- The metric registry can be accessed **before** `EmbeddedHiveMQ` is started.
+- The registry is cleared when `stop()` is called.
+
+**Example:**
+
+```java
+import com.codahale.metrics.MetricRegistry;
+import com.codahale.metrics.Gauge;
+
+MetricRegistry metrics = hivemq.getMetricRegistry();
+
+// Print all metrics
+metrics.getMetrics().forEach((name, metric) -> {
+    System.out.println(name + ": " + metric);
+});
+
+// Access specific metrics
+Gauge<?> connectionsGauge = (Gauge<?>) metrics.getMetrics()
+    .get("com.hivemq.networking.connections.current");
+
+if (connectionsGauge != null) {
+    System.out.println("Current connections: " + connectionsGauge.getValue());
+}
+```
+
+---
+
+### close()
+
+Closes the embedded HiveMQ instance and releases all resources.
+
+```java
+void close() throws ExecutionException, InterruptedException
+```
+
+**Throws:**
+- `ExecutionException` - If an error occurs during shutdown
+- `InterruptedException` - If the shutdown is interrupted
+
+**Behavior:**
+- Automatically called when using try-with-resources
+- Performs a graceful shutdown of the broker
+
+**Example:**
+
+```java
+// Automatic close with try-with-resources (recommended)
+try (EmbeddedHiveMQ hivemq = EmbeddedHiveMQ.builder().build()) {
+    hivemq.start().join();
+    // Use the broker
+} catch (Exception e) {
+    e.printStackTrace();
+}
+
+// Manual close
+EmbeddedHiveMQ hivemq = EmbeddedHiveMQ.builder().build();
+try {
+    hivemq.start().join();
+    // Use the broker
+} finally {
+    hivemq.close();
+}
+```
+
+## Usage Examples
+
+### Basic Usage
+
+```java
+import com.hivemq.embedded.EmbeddedHiveMQ;
+
+public class BasicExample {
+    public static void main(String[] args) {
+        try (EmbeddedHiveMQ hivemq = EmbeddedHiveMQ.builder().build()) {
+            hivemq.start().join();
+            System.out.println("HiveMQ is running");
+            
+            // Broker runs here
+            Thread.sleep(60000); // Run for 1 minute
+            
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+}
+```
+
+### Lifecycle Management
+
+```java
+import com.hivemq.embedded.EmbeddedHiveMQ;
+import java.util.concurrent.CompletableFuture;
+
+public class LifecycleExample {
+    public static void main(String[] args) {
+        try (EmbeddedHiveMQ hivemq = EmbeddedHiveMQ.builder().build()) {
+            
+            // Start
+            CompletableFuture<Void> startFuture = hivemq.start();
+            startFuture.join();
+            System.out.println("Started");
+            
+            // Run
+            Thread.sleep(30000);
+            
+            // Stop
+            CompletableFuture<Void> stopFuture = hivemq.stop();
+            stopFuture.join();
+            System.out.println("Stopped");
+            
+            // Restart
+            hivemq.start().join();
+            System.out.println("Restarted");
+            
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+}
+```
+
+### Monitoring with Metrics
+
+```java
+import com.hivemq.embedded.EmbeddedHiveMQ;
+import com.codahale.metrics.MetricRegistry;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+
+public class MetricsExample {
+    public static void main(String[] args) {
+        try (EmbeddedHiveMQ hivemq = EmbeddedHiveMQ.builder().build()) {
+            hivemq.start().join();
+            
+            MetricRegistry metrics = hivemq.getMetricRegistry();
+            
+            // Schedule periodic metric reporting
+            ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
+            executor.scheduleAtFixedRate(() -> {
+                System.out.println("=== Metrics ===");
+                metrics.getMetrics().forEach((name, metric) -> {
+                    System.out.println(name + ": " + metric);
+                });
+            }, 0, 10, TimeUnit.SECONDS);
+            
+            // Run for a while
+            Thread.sleep(60000);
+            
+            executor.shutdown();
+            
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+}
+```
+
+## See Also
+
+- [EmbeddedHiveMQBuilder](/embedded/api/embedded-hivemq-builder) - Builder for creating `EmbeddedHiveMQ` instances
+- [EmbeddedExtension](/embedded/api/embedded-extension) - Add programmatic extensions
+- [Configuration](/embedded/advanced/configuration) - Advanced configuration options

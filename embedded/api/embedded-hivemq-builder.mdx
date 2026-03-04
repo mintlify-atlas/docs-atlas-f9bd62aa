@@ -1,0 +1,374 @@
+---
+title: "EmbeddedHiveMQBuilder"
+description: "API reference for the EmbeddedHiveMQBuilder interface"
+---
+
+The `EmbeddedHiveMQBuilder` interface provides a fluent API for configuring and building an `EmbeddedHiveMQ` instance.
+
+## Package
+
+```java
+com.hivemq.embedded.EmbeddedHiveMQBuilder
+```
+
+## Interface Declaration
+
+```java
+public interface EmbeddedHiveMQBuilder
+```
+
+## Methods
+
+### builder()
+
+Creates a new `EmbeddedHiveMQBuilder` instance.
+
+```java
+static @NotNull EmbeddedHiveMQBuilder builder()
+```
+
+**Returns:**
+- `EmbeddedHiveMQBuilder` - A new builder instance
+
+**Example:**
+
+```java
+EmbeddedHiveMQBuilder builder = EmbeddedHiveMQBuilder.builder();
+```
+
+---
+
+### withConfigurationFolder()
+
+Sets the HiveMQ configuration folder path.
+
+```java
+@NotNull EmbeddedHiveMQBuilder withConfigurationFolder(@Nullable Path configFolder)
+```
+
+**Parameters:**
+- `configFolder` (`Path`) - The path to the configuration folder. Pass `null` to use the default location.
+
+**Returns:**
+- `EmbeddedHiveMQBuilder` - This builder instance for method chaining
+
+**Behavior:**
+- Using this method overrides all other ways to configure the `HIVEMQ_CONFIG_FOLDER`.
+- The configuration folder should contain a `config.xml` file with HiveMQ settings.
+
+**Example:**
+
+```java
+import java.nio.file.Path;
+
+EmbeddedHiveMQBuilder builder = EmbeddedHiveMQ.builder()
+    .withConfigurationFolder(Path.of("/opt/hivemq/conf"));
+```
+
+**See Also:**
+- [HiveMQ Folders Documentation](https://www.hivemq.com/docs/hivemq/latest/user-guide/configuration.html#folders)
+
+---
+
+### withDataFolder()
+
+Sets the HiveMQ data folder path.
+
+```java
+@NotNull EmbeddedHiveMQBuilder withDataFolder(@Nullable Path dataFolder)
+```
+
+**Parameters:**
+- `dataFolder` (`Path`) - The path to the data folder. Pass `null` to use the default location.
+
+**Returns:**
+- `EmbeddedHiveMQBuilder` - This builder instance for method chaining
+
+**Behavior:**
+- Using this method overrides all other ways to configure the `HIVEMQ_DATA_FOLDER`.
+- The data folder is used for persistence storage (client sessions, queued messages, etc.).
+
+**Example:**
+
+```java
+import java.nio.file.Path;
+
+EmbeddedHiveMQBuilder builder = EmbeddedHiveMQ.builder()
+    .withDataFolder(Path.of("/var/lib/hivemq/data"));
+```
+
+**See Also:**
+- [HiveMQ Folders Documentation](https://www.hivemq.com/docs/hivemq/latest/user-guide/configuration.html#folders)
+
+---
+
+### withExtensionsFolder()
+
+Sets the HiveMQ extensions folder path.
+
+```java
+@NotNull EmbeddedHiveMQBuilder withExtensionsFolder(@Nullable Path extensionsFolder)
+```
+
+**Parameters:**
+- `extensionsFolder` (`Path`) - The path to the extensions folder. Pass `null` to use the default location.
+
+**Returns:**
+- `EmbeddedHiveMQBuilder` - This builder instance for method chaining
+
+**Behavior:**
+- Using this method overrides all other ways to configure the `HIVEMQ_EXTENSION_FOLDER`.
+- The extensions folder can contain standard HiveMQ extensions (file-based).
+- This is separate from programmatic extensions added via `withEmbeddedExtension()`.
+
+**Example:**
+
+```java
+import java.nio.file.Path;
+
+EmbeddedHiveMQBuilder builder = EmbeddedHiveMQ.builder()
+    .withExtensionsFolder(Path.of("/opt/hivemq/extensions"));
+```
+
+**See Also:**
+- [HiveMQ Folders Documentation](https://www.hivemq.com/docs/hivemq/latest/user-guide/configuration.html#folders)
+
+---
+
+### withEmbeddedExtension()
+
+Adds a programmatic extension to the embedded HiveMQ instance.
+
+```java
+@NotNull EmbeddedHiveMQBuilder withEmbeddedExtension(@Nullable EmbeddedExtension embeddedExtension)
+```
+
+**Parameters:**
+- `embeddedExtension` (`EmbeddedExtension`) - The embedded extension to add. Pass `null` to remove any previously set extension.
+
+**Returns:**
+- `EmbeddedHiveMQBuilder` - This builder instance for method chaining
+
+**Example:**
+
+```java
+EmbeddedExtension extension = EmbeddedExtension.builder()
+    .withId("my-extension")
+    .withName("My Extension")
+    .withVersion("1.0.0")
+    .withExtensionMain(new MyExtensionMain())
+    .build();
+
+EmbeddedHiveMQBuilder builder = EmbeddedHiveMQ.builder()
+    .withEmbeddedExtension(extension);
+```
+
+**See Also:**
+- [EmbeddedExtension](/embedded/api/embedded-extension)
+- [EmbeddedExtensionBuilder](/embedded/api/embedded-extension-builder)
+
+---
+
+### withoutLoggingBootstrap()
+
+Disables the internal logging bootstrap.
+
+```java
+@NotNull EmbeddedHiveMQBuilder withoutLoggingBootstrap()
+```
+
+**Returns:**
+- `EmbeddedHiveMQBuilder` - This builder instance for method chaining
+
+**Behavior:**
+- Use this when logging is already provided by other frameworks, such as OSGi or Spring Boot.
+- Prevents HiveMQ from initializing its own logging configuration.
+
+**Example:**
+
+```java
+EmbeddedHiveMQBuilder builder = EmbeddedHiveMQ.builder()
+    .withoutLoggingBootstrap();
+```
+
+---
+
+### build()
+
+Builds the `EmbeddedHiveMQ` instance with the configured settings.
+
+```java
+@NotNull EmbeddedHiveMQ build()
+```
+
+**Returns:**
+- `EmbeddedHiveMQ` - A new embedded HiveMQ instance
+
+**Behavior:**
+- Sets `InternalConfigurations.AUTH_DENY_UNAUTHENTICATED_CONNECTIONS` to `false` for permissive mode.
+- If you don't want this permissive mode, reset the configuration to `true` before calling `start()`.
+
+**Example:**
+
+```java
+EmbeddedHiveMQ hivemq = EmbeddedHiveMQ.builder()
+    .withDataFolder(Path.of("/tmp/hivemq-data"))
+    .build();
+```
+
+<Warning>
+The `build()` method sets `AUTH_DENY_UNAUTHENTICATED_CONNECTIONS` to `false`, allowing unauthenticated connections. Reset this to `true` before starting if you need authentication.
+</Warning>
+
+## Usage Examples
+
+### Basic Configuration
+
+```java
+import com.hivemq.embedded.EmbeddedHiveMQ;
+import java.nio.file.Path;
+
+public class BasicConfiguration {
+    public static void main(String[] args) {
+        try (EmbeddedHiveMQ hivemq = EmbeddedHiveMQ.builder()
+                .withConfigurationFolder(Path.of("/etc/hivemq/conf"))
+                .withDataFolder(Path.of("/var/lib/hivemq/data"))
+                .withExtensionsFolder(Path.of("/opt/hivemq/extensions"))
+                .build()) {
+            
+            hivemq.start().join();
+            System.out.println("HiveMQ started with custom folders");
+            
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+}
+```
+
+### With Embedded Extension
+
+```java
+import com.hivemq.embedded.EmbeddedExtension;
+import com.hivemq.embedded.EmbeddedHiveMQ;
+import com.hivemq.extension.sdk.api.ExtensionMain;
+import com.hivemq.extension.sdk.api.parameter.ExtensionStartInput;
+import com.hivemq.extension.sdk.api.parameter.ExtensionStartOutput;
+import com.hivemq.extension.sdk.api.parameter.ExtensionStopInput;
+import com.hivemq.extension.sdk.api.parameter.ExtensionStopOutput;
+import org.jetbrains.annotations.NotNull;
+import java.nio.file.Path;
+
+public class WithExtension {
+    public static void main(String[] args) {
+        EmbeddedExtension extension = EmbeddedExtension.builder()
+            .withId("hello-world-extension")
+            .withName("Hello World")
+            .withVersion("1.0.0")
+            .withAuthor("HiveMQ")
+            .withExtensionMain(new HelloWorldExtension())
+            .build();
+        
+        try (EmbeddedHiveMQ hivemq = EmbeddedHiveMQ.builder()
+                .withDataFolder(Path.of("/tmp/hivemq-data"))
+                .withEmbeddedExtension(extension)
+                .build()) {
+            
+            hivemq.start().join();
+            System.out.println("HiveMQ started with extension");
+            
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+    
+    private static class HelloWorldExtension implements ExtensionMain {
+        @Override
+        public void extensionStart(
+                @NotNull ExtensionStartInput input,
+                @NotNull ExtensionStartOutput output) {
+            System.out.println("Hello World Extension started!");
+        }
+        
+        @Override
+        public void extensionStop(
+                @NotNull ExtensionStopInput input,
+                @NotNull ExtensionStopOutput output) {
+            System.out.println("Hello World Extension stopped!");
+        }
+    }
+}
+```
+
+### With Custom Logging
+
+```java
+import com.hivemq.embedded.EmbeddedHiveMQ;
+import java.nio.file.Path;
+
+public class CustomLogging {
+    public static void main(String[] args) {
+        // Assume Spring Boot or another framework has configured logging
+        
+        try (EmbeddedHiveMQ hivemq = EmbeddedHiveMQ.builder()
+                .withDataFolder(Path.of("/tmp/hivemq-data"))
+                .withoutLoggingBootstrap()  // Don't initialize HiveMQ logging
+                .build()) {
+            
+            hivemq.start().join();
+            System.out.println("HiveMQ started with external logging");
+            
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+}
+```
+
+### Minimal Configuration
+
+```java
+import com.hivemq.embedded.EmbeddedHiveMQ;
+
+public class MinimalConfiguration {
+    public static void main(String[] args) {
+        // Use all default settings
+        try (EmbeddedHiveMQ hivemq = EmbeddedHiveMQ.builder().build()) {
+            hivemq.start().join();
+            System.out.println("HiveMQ started with defaults");
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+}
+```
+
+### Fluent Configuration
+
+```java
+import com.hivemq.embedded.EmbeddedHiveMQ;
+import java.nio.file.Path;
+
+public class FluentConfiguration {
+    public static void main(String[] args) {
+        try (EmbeddedHiveMQ hivemq = EmbeddedHiveMQ.builder()
+                .withConfigurationFolder(Path.of("/etc/hivemq/conf"))
+                .withDataFolder(Path.of("/var/lib/hivemq/data"))
+                .withExtensionsFolder(Path.of("/opt/hivemq/extensions"))
+                .withoutLoggingBootstrap()
+                .build()) {
+            
+            hivemq.start().join();
+            
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+}
+```
+
+## See Also
+
+- [EmbeddedHiveMQ](/embedded/api/embedded-hivemq) - The main broker interface
+- [Configuration](/embedded/advanced/configuration) - Detailed configuration guide
+- [EmbeddedExtension](/embedded/api/embedded-extension) - Extension API reference

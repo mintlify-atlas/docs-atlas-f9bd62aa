@@ -1,0 +1,207 @@
+---
+title: Security Settings
+description: Configure security-related options in HiveMQ Community Edition
+---
+
+The security configuration section allows you to configure validation and security-related settings for MQTT protocol handling.
+
+## Configuration Section
+
+All security settings are configured within the `<security>` element:
+
+```xml
+<hivemq>
+    <security>
+        <!-- Security configuration options -->
+    </security>
+</hivemq>
+```
+
+## UTF-8 Validation
+
+Validate that topics and client identifiers are well-formed UTF-8 strings.
+
+### Configuration
+
+```xml
+<security>
+    <utf8-validation>
+        <enabled>true</enabled>
+    </utf8-validation>
+</security>
+```
+
+**Default:** `true`
+
+### Description
+
+When enabled, HiveMQ validates that:
+- Client identifiers are valid UTF-8
+- Topic names in PUBLISH, SUBSCRIBE, and UNSUBSCRIBE packets are valid UTF-8
+
+Invalid UTF-8 will cause the connection to be closed according to MQTT specification.
+
+### Recommendation
+
+Keep this enabled for compliance with the MQTT specification and to prevent encoding issues.
+
+## Payload Format Validation
+
+Validate message payloads according to the MQTT 5 Payload Format Indicator.
+
+### Configuration
+
+```xml
+<security>
+    <payload-format-validation>
+        <enabled>false</enabled>
+    </payload-format-validation>
+</security>
+```
+
+**Default:** `false`
+
+### Description
+
+When enabled, HiveMQ validates that message payloads match the Payload Format Indicator:
+- If the indicator is `1` (UTF-8), the payload is validated as UTF-8
+- If validation fails, the message is not delivered
+
+This is an MQTT 5 feature.
+
+### Use Cases
+
+- Enable when you need strict payload validation
+- Disable for binary payloads or when you handle validation in your application
+
+## Allow Empty Client ID
+
+Allow clients to connect with an empty client identifier.
+
+### Configuration
+
+```xml
+<security>
+    <allow-empty-client-id>
+        <enabled>true</enabled>
+    </allow-empty-client-id>
+</security>
+```
+
+**Default:** `true`
+
+### Description
+
+When enabled, HiveMQ allows clients to connect with an empty client identifier. The server will automatically assign a unique client identifier.
+
+This is standard behavior for MQTT 3.1.1 and MQTT 5 with clean session/clean start set to `true`.
+
+### Recommendation
+
+- Keep enabled for MQTT 3.1.1 and MQTT 5 compliance
+- Disable if you require all clients to provide their own identifier
+
+## Allow Request Problem Information
+
+Allow clients to request problem information in MQTT 5.
+
+### Configuration
+
+```xml
+<security>
+    <allow-request-problem-information>
+        <enabled>true</enabled>
+    </allow-request-problem-information>
+</security>
+```
+
+**Default:** `true`
+
+### Description
+
+When enabled, clients can request that the server include reason strings and user properties in error responses (MQTT 5 feature).
+
+When disabled:
+- Reason strings are not sent in CONNACK, PUBACK, PUBREC, PUBREL, PUBCOMP, SUBACK, UNSUBACK, and DISCONNECT packets
+- User properties are not sent in these packets
+
+### Use Cases
+
+- Enable for better debugging and error reporting
+- Disable to reduce bandwidth usage and improve privacy
+
+## Complete Example
+
+Here's a complete example with all security settings:
+
+```xml
+<hivemq>
+    <security>
+        <utf8-validation>
+            <enabled>true</enabled>
+        </utf8-validation>
+
+        <payload-format-validation>
+            <enabled>false</enabled>
+        </payload-format-validation>
+
+        <allow-empty-client-id>
+            <enabled>true</enabled>
+        </allow-empty-client-id>
+
+        <allow-request-problem-information>
+            <enabled>true</enabled>
+        </allow-request-problem-information>
+    </security>
+</hivemq>
+```
+
+## Recommended Settings
+
+### Development Environment
+
+```xml
+<security>
+    <utf8-validation>
+        <enabled>true</enabled>
+    </utf8-validation>
+    <payload-format-validation>
+        <enabled>false</enabled>
+    </payload-format-validation>
+    <allow-empty-client-id>
+        <enabled>true</enabled>
+    </allow-empty-client-id>
+    <allow-request-problem-information>
+        <enabled>true</enabled>
+    </allow-request-problem-information>
+</security>
+```
+
+### Production Environment
+
+```xml
+<security>
+    <utf8-validation>
+        <enabled>true</enabled>
+    </utf8-validation>
+    <payload-format-validation>
+        <enabled>true</enabled> <!-- If using text-based payloads -->
+    </payload-format-validation>
+    <allow-empty-client-id>
+        <enabled>false</enabled> <!-- If you require explicit client IDs -->
+    </allow-empty-client-id>
+    <allow-request-problem-information>
+        <enabled>false</enabled> <!-- To reduce information disclosure -->
+    </allow-request-problem-information>
+</security>
+```
+
+## Additional Security
+
+For comprehensive security, also consider:
+
+- Using TLS listeners (see [Listeners](/configuration/listeners))
+- Implementing authentication and authorization via extensions
+- Configuring restrictions (see [Restrictions](/configuration/restrictions))
+- Network-level security (firewalls, VPNs)
+- Regular security updates and monitoring

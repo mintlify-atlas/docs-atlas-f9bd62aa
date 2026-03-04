@@ -1,0 +1,350 @@
+---
+title: "Configuration"
+description: "Advanced configuration options for HiveMQ Community Edition Embedded Mode"
+---
+
+Learn how to configure HiveMQ CE Embedded Mode using folders, configuration files, and internal settings.
+
+## Folder Configuration
+
+HiveMQ uses three main folders for configuration, data, and extensions. You can set these folders programmatically when building an `EmbeddedHiveMQ` instance.
+
+### Configuration Folder
+
+The configuration folder contains the `config.xml` file with HiveMQ settings.
+
+```java
+import java.nio.file.Path;
+
+EmbeddedHiveMQ hivemq = EmbeddedHiveMQ.builder()
+    .withConfigurationFolder(Path.of("/etc/hivemq/conf"))
+    .build();
+```
+
+**Default Behavior:** If not specified, HiveMQ uses the default configuration folder location.
+
+**Configuration File:** The folder should contain a `config.xml` file. See the [HiveMQ Configuration Documentation](https://www.hivemq.com/docs/hivemq/latest/user-guide/configuration.html) for configuration options.
+
+### Data Folder
+
+The data folder stores persistent data such as client sessions, queued messages, and retained messages.
+
+```java
+EmbeddedHiveMQ hivemq = EmbeddedHiveMQ.builder()
+    .withDataFolder(Path.of("/var/lib/hivemq/data"))
+    .build();
+```
+
+**Important:** The data folder location affects whether the broker retains state across restarts.
+
+### Extensions Folder
+
+The extensions folder contains file-based HiveMQ extensions.
+
+```java
+EmbeddedHiveMQ hivemq = EmbeddedHiveMQ.builder()
+    .withExtensionsFolder(Path.of("/opt/hivemq/extensions"))
+    .build();
+```
+
+<Note>
+File-based extensions are separate from programmatic extensions added via `withEmbeddedExtension()`.
+</Note>
+
+### Complete Folder Configuration
+
+```java
+import com.hivemq.embedded.EmbeddedHiveMQ;
+import java.nio.file.Path;
+
+public class FolderConfiguration {
+    public static void main(String[] args) {
+        try (EmbeddedHiveMQ hivemq = EmbeddedHiveMQ.builder()
+                .withConfigurationFolder(Path.of("/etc/hivemq/conf"))
+                .withDataFolder(Path.of("/var/lib/hivemq/data"))
+                .withExtensionsFolder(Path.of("/opt/hivemq/extensions"))
+                .build()) {
+            
+            hivemq.start().join();
+            System.out.println("HiveMQ started with custom folders");
+            
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+}
+```
+
+## Configuration File (config.xml)
+
+The `config.xml` file in the configuration folder controls HiveMQ's runtime behavior.
+
+### Sample Configuration
+
+```xml config.xml
+<?xml version="1.0"?>
+<hivemq>
+    <listeners>
+        <tcp-listener>
+            <port>1883</port>
+            <bind-address>0.0.0.0</bind-address>
+        </tcp-listener>
+    </listeners>
+    
+    <mqtt>
+        <queued-messages>
+            <max-queue-size>1000</max-queue-size>
+            <strategy>discard</strategy>
+        </queued-messages>
+        
+        <session-expiry>
+            <max-interval>4294967295</max-interval>
+        </session-expiry>
+        
+        <retained-messages>
+            <enabled>true</enabled>
+        </retained-messages>
+    </mqtt>
+</hivemq>
+```
+
+### Key Configuration Options
+
+**Listeners:**
+- TCP listener port and bind address
+- WebSocket listeners
+- TLS/SSL configuration
+
+**MQTT Settings:**
+- Maximum queue size
+- Session expiry intervals
+- Keep-alive settings
+- QoS levels
+- Retained messages
+
+**See Also:** [HiveMQ Configuration Guide](https://www.hivemq.com/docs/hivemq/latest/user-guide/configuration.html)
+
+## Authentication Configuration
+
+By default, `EmbeddedHiveMQ` allows unauthenticated connections for ease of development.
+
+### Enabling Authentication
+
+```java
+import com.hivemq.configuration.service.InternalConfigurations;
+
+EmbeddedHiveMQ hivemq = EmbeddedHiveMQ.builder().build();
+
+// Enable authentication before starting
+InternalConfigurations.AUTH_DENY_UNAUTHENTICATED_CONNECTIONS.set(true);
+
+hivemq.start().join();
+```
+
+<Warning>
+The `build()` method sets `AUTH_DENY_UNAUTHENTICATED_CONNECTIONS` to `false` by default. Reset it to `true` before calling `start()` if you need authentication.
+</Warning>
+
+### Implementing Authentication with Extensions
+
+Authentication is typically implemented via extensions:
+
+```java
+import com.hivemq.embedded.EmbeddedExtension;
+import com.hivemq.embedded.EmbeddedHiveMQ;
+import com.hivemq.extension.sdk.api.ExtensionMain;
+import com.hivemq.extension.sdk.api.auth.SimpleAuthenticator;
+import com.hivemq.extension.sdk.api.parameter.ExtensionStartInput;
+import com.hivemq.extension.sdk.api.parameter.ExtensionStartOutput;
+import com.hivemq.extension.sdk.api.parameter.ExtensionStopInput;
+import com.hivemq.extension.sdk.api.parameter.ExtensionStopOutput;
+import com.hivemq.extension.sdk.api.services.Services;
+import org.jetbrains.annotations.NotNull;
+
+public class AuthenticationExample {
+    public static void main(String[] args) {
+        EmbeddedExtension authExtension = EmbeddedExtension.builder()
+            .withId("auth-extension")
+            .withName("Simple Authentication")
+            .withVersion("1.0.0")
+            .withExtensionMain(new AuthExtensionMain())
+            .build();
+        
+        try (EmbeddedHiveMQ hivemq = EmbeddedHiveMQ.builder()
+                .withEmbeddedExtension(authExtension)
+                .build()) {
+            
+            hivemq.start().join();
+            System.out.println("HiveMQ with authentication running");
+            
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+    
+    private static class AuthExtensionMain implements ExtensionMain {
+        @Override
+        public void extensionStart(
+                @NotNull ExtensionStartInput input,
+                @NotNull ExtensionStartOutput output) {
+            
+            SimpleAuthenticator authenticator = (simpleAuthInput, simpleAuthOutput) -> {
+                String username = simpleAuthInput.getConnectPacket()
+                    .getUserName().orElse("");
+                String password = simpleAuthInput.getConnectPacket()
+                    .getPassword().map(String::new).orElse("");
+                
+                if ("user".equals(username) && "password".equals(password)) {
+                    simpleAuthOutput.authenticateSuccessfully();
+                } else {
+                    simpleAuthOutput.failAuthentication();
+                }
+            };
+            
+            Services.securityRegistry().setAuthenticatorProvider(
+                authenticatorProviderInput -> authenticator);
+        }
+        
+        @Override
+        public void extensionStop(
+                @NotNull ExtensionStopInput input,
+                @NotNull ExtensionStopOutput output) {
+            // Cleanup
+        }
+    }
+}
+```
+
+## Logging Configuration
+
+### Disable Logging Bootstrap
+
+If your application uses Spring Boot, OSGi, or another framework that provides logging, disable HiveMQ's logging bootstrap:
+
+```java
+EmbeddedHiveMQ hivemq = EmbeddedHiveMQ.builder()
+    .withoutLoggingBootstrap()
+    .build();
+```
+
+### Custom Logback Configuration
+
+Place a `logback.xml` file in the configuration folder to customize logging:
+
+```xml logback.xml
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+    
+    <logger name="com.hivemq" level="INFO"/>
+    
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+    </root>
+</configuration>
+```
+
+## Internal Configurations
+
+HiveMQ provides internal configuration options for advanced use cases.
+
+### Common Internal Configurations
+
+```java
+import com.hivemq.configuration.service.InternalConfigurations;
+
+// Authentication
+InternalConfigurations.AUTH_DENY_UNAUTHENTICATED_CONNECTIONS.set(true);
+
+// Persistence bucket count (affects performance)
+InternalConfigurations.PERSISTENCE_BUCKET_COUNT.set(64);
+
+// Payload persistence cleanup interval
+InternalConfigurations.PAYLOAD_PERSISTENCE_CLEANUP_SCHEDULE_MSEC.set(60000);
+```
+
+<Warning>
+Internal configurations are advanced settings. Changing them without understanding their impact can affect HiveMQ's behavior and performance.
+</Warning>
+
+## Environment Variables
+
+You can also configure HiveMQ using environment variables:
+
+- `HIVEMQ_CONFIG_FOLDER` - Configuration folder path
+- `HIVEMQ_DATA_FOLDER` - Data folder path
+- `HIVEMQ_EXTENSIONS_FOLDER` - Extensions folder path
+- `HIVEMQ_LOG_LEVEL` - Log level (INFO, DEBUG, etc.)
+
+<Note>
+Programmatic configuration via the builder methods takes precedence over environment variables.
+</Note>
+
+## Performance Tuning
+
+### Thread Pool Configuration
+
+```java
+import com.hivemq.configuration.service.InternalConfigurations;
+
+// Single writer thread pool size
+InternalConfigurations.SINGLE_WRITER_THREAD_POOL_SIZE.set(4);
+
+// Credits per execution
+InternalConfigurations.SINGLE_WRITER_CREDITS_PER_EXECUTION.set(200);
+```
+
+### Memory Settings
+
+```java
+// QoS 0 memory limit per client
+InternalConfigurations.QOS_0_MEMORY_LIMIT_PER_CLIENT_BYTES.set(1024 * 1024); // 1MB
+
+// QoS 0 memory hard limit divisor
+InternalConfigurations.QOS_0_MEMORY_HARD_LIMIT_DIVISOR.set(100);
+```
+
+## Complete Configuration Example
+
+```java
+import com.hivemq.configuration.service.InternalConfigurations;
+import com.hivemq.embedded.EmbeddedHiveMQ;
+import java.nio.file.Path;
+
+public class CompleteConfiguration {
+    public static void main(String[] args) {
+        try (EmbeddedHiveMQ hivemq = EmbeddedHiveMQ.builder()
+                // Folder configuration
+                .withConfigurationFolder(Path.of("/etc/hivemq/conf"))
+                .withDataFolder(Path.of("/var/lib/hivemq/data"))
+                .withExtensionsFolder(Path.of("/opt/hivemq/extensions"))
+                // Logging configuration
+                .withoutLoggingBootstrap()
+                .build()) {
+            
+            // Internal configurations (before start)
+            InternalConfigurations.AUTH_DENY_UNAUTHENTICATED_CONNECTIONS.set(true);
+            InternalConfigurations.PERSISTENCE_BUCKET_COUNT.set(64);
+            
+            // Start the broker
+            hivemq.start().join();
+            System.out.println("HiveMQ configured and started");
+            
+            // Application logic
+            
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+}
+```
+
+## See Also
+
+- [HiveMQ Configuration Documentation](https://www.hivemq.com/docs/hivemq/latest/user-guide/configuration.html)
+- [Persistence Configuration](/embedded/advanced/persistence)
+- [Dependency Exclusions](/embedded/advanced/dependency-exclusions)

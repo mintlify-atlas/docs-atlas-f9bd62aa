@@ -1,0 +1,609 @@
+---
+title: "Authorization"
+description: "Control MQTT publish and subscribe permissions using the HiveMQ Extension SDK"
+---
+
+## Overview
+
+Authorization extensions control what MQTT clients can publish and subscribe to. The Extension SDK provides fine-grained authorization for:
+
+- **Publish Authorization** - Control which topics clients can publish to
+- **Subscribe Authorization** - Control which topics clients can subscribe to
+- **Per-Topic Permissions** - Different permissions for different topics
+- **Dynamic Permissions** - Change permissions based on runtime conditions
+
+## Authorization Flow
+
+### Publish Authorization
+
+1. Client sends PUBLISH packet
+2. HiveMQ calls `PublishAuthorizer.authorizePublish()` for each registered authorizer
+3. Authorizer allows, denies, or delegates the decision
+4. PUBLISH is processed or client is disconnected based on result
+
+See `PluginAuthorizerService.java:36` for publish authorization service.
+
+### Subscribe Authorization
+
+1. Client sends SUBSCRIBE packet
+2. HiveMQ calls `SubscriptionAuthorizer.authorizeSubscribe()` for each topic filter
+3. Authorizer allows, denies, or modifies each subscription
+4. SUBACK is sent with results
+
+See `PluginAuthorizerService.java:52` for subscription authorization service.
+
+## Implementing an Authorizer
+
+### Step 1: Create AuthorizerProvider
+
+Register your authorizer in `extensionStart()`:
+
+```java
+import com.hivemq.extension.sdk.api.ExtensionMain;
+import com.hivemq.extension.sdk.api.annotations.NotNull;
+import com.hivemq.extension.sdk.api.parameter.*;
+import com.hivemq.extension.sdk.api.services.Services;
+import com.hivemq.extension.sdk.api.auth.Authorizer;
+import com.hivemq.extension.sdk.api.auth.PublishAuthorizer;
+import com.hivemq.extension.sdk.api.auth.SubscriptionAuthorizer;
+
+public class MyAuthzExtension implements ExtensionMain {
+    
+    @Override
+    public void extensionStart(
+            @NotNull ExtensionStartInput input,
+            @NotNull ExtensionStartOutput output) {
+        
+        Services services = input.getServices();
+        
+        // Register authorizer provider
+        services.authorizationService().setAuthorizerProvider(
+            authorizerProviderInput -> new MyAuthorizer()
+        );
+    }
+    
+    @Override
+    public void extensionStop(
+            @NotNull ExtensionStopInput input,
+            @NotNull ExtensionStopOutput output) {
+        // Cleanup
+    }
+}
+```
+
+### Step 2: Implement PublishAuthorizer
+
+```java
+import com.hivemq.extension.sdk.api.auth.PublishAuthorizer;
+import com.hivemq.extension.sdk.api.auth.parameter.PublishAuthorizerInput;
+import com.hivemq.extension.sdk.api.auth.parameter.PublishAuthorizerOutput;
+import com.hivemq.extension.sdk.api.annotations.NotNull;
+import com.hivemq.extension.sdk.api.packets.publish.PublishPacket;
+
+public class MyPublishAuthorizer implements PublishAuthorizer {
+    
+    @Override
+    public void authorizePublish(
+            @NotNull PublishAuthorizerInput input,
+            @NotNull PublishAuthorizerOutput output) {
+        
+        PublishPacket publish = input.getPublishPacket();
+        String topic = publish.getTopic();
+        String clientId = input.getClientInformation().getClientId();
+        
+        // Simple topic-based authorization
+        if (topic.startsWith("clients/" + clientId + "/")) {
+            // Allow clients to publish to their own topics
+            output.authorizeSuccessfully();
+        } else if (topic.startsWith("sensors/")) {
+            // Allow all clients to publish sensor data
+            output.authorizeSuccessfully();
+        } else {
+            // Deny everything else
+            output.failAuthorization();
+        }
+    }
+}
+```
+
+### Step 3: Implement SubscriptionAuthorizer
+
+```java
+import com.hivemq.extension.sdk.api.auth.SubscriptionAuthorizer;
+import com.hivemq.extension.sdk.api.auth.parameter.SubscriptionAuthorizerInput;
+import com.hivemq.extension.sdk.api.auth.parameter.SubscriptionAuthorizerOutput;
+import com.hivemq.extension.sdk.api.packets.subscribe.Subscription;
+
+public class MySubscriptionAuthorizer implements SubscriptionAuthorizer {
+    
+    @Override
+    public void authorizeSubscribe(
+            @NotNull SubscriptionAuthorizerInput input,
+            @NotNull SubscriptionAuthorizerOutput output) {
+        
+        Subscription subscription = input.getSubscription();
+        String topicFilter = subscription.getTopicFilter();
+        String clientId = input.getClientInformation().getClientId();
+        
+        // Allow clients to subscribe to their own topics
+        if (topicFilter.startsWith("clients/" + clientId + "/")) {
+            output.authorizeSuccessfully();
+        }
+        // Allow subscribing to public topics
+        else if (topicFilter.startsWith("public/")) {
+            output.authorizeSuccessfully();
+        }
+        // Allow wildcard subscriptions for admin clients
+        else if (clientId.startsWith("admin-") && topicFilter.contains("#")) {
+            output.authorizeSuccessfully();
+        }
+        else {
+            output.failAuthorization();
+        }
+    }
+}
+```
+
+### Combined Authorizer
+
+Implement both interfaces in a single class:
+
+```java
+public class MyAuthorizer implements PublishAuthorizer, SubscriptionAuthorizer {
+    
+    @Override
+    public void authorizePublish(
+            @NotNull PublishAuthorizerInput input,
+            @NotNull PublishAuthorizerOutput output) {
+        // Publish authorization logic
+    }
+    
+    @Override
+    public void authorizeSubscribe(
+            @NotNull SubscriptionAuthorizerInput input,
+            @NotNull SubscriptionAuthorizerOutput output) {
+        // Subscribe authorization logic
+    }
+}
+```
+
+## Authorization Methods
+
+### Allow
+
+Grant permission for the operation:
+
+```java
+output.authorizeSuccessfully();
+```
+
+### Deny
+
+Deny permission for the operation:
+
+```java
+output.failAuthorization();
+```
+
+For MQTT 5.0, optionally specify a reason code:
+
+```java
+import com.hivemq.extension.sdk.api.packets.general.DisconnectReasonCode;
+
+output.failAuthorization(
+    DisconnectReasonCode.NOT_AUTHORIZED,
+    "Insufficient permissions for topic"
+);
+```
+
+### Delegate
+
+Pass decision to next authorizer:
+
+```java
+output.nextExtensionOrDefault();
+```
+
+### Disconnect Client
+
+Forcefully disconnect the client:
+
+```java
+output.disconnectClient(
+    DisconnectReasonCode.NOT_AUTHORIZED,
+    "Policy violation"
+);
+```
+
+## Modifying Subscriptions
+
+Change subscription properties during authorization:
+
+```java
+@Override
+public void authorizeSubscribe(
+        @NotNull SubscriptionAuthorizerInput input,
+        @NotNull SubscriptionAuthorizerOutput output) {
+    
+    Subscription subscription = input.getSubscription();
+    ModifiableSubscription modifiable = output.getSubscription();
+    
+    // Downgrade QoS for non-premium clients
+    String clientId = input.getClientInformation().getClientId();
+    if (!clientId.startsWith("premium-")) {
+        modifiable.setQos(Qos.AT_MOST_ONCE);
+    }
+    
+    // Allow subscription with modifications
+    output.authorizeSuccessfully();
+}
+```
+
+## Role-Based Authorization
+
+Implement role-based access control:
+
+```java
+import java.util.*;
+
+public class RoleBasedAuthorizer implements PublishAuthorizer, SubscriptionAuthorizer {
+    
+    private final Map<String, Set<String>> userRoles;
+    private final Map<String, Set<String>> rolePublishPermissions;
+    private final Map<String, Set<String>> roleSubscribePermissions;
+    
+    public RoleBasedAuthorizer() {
+        // Initialize role mappings
+        userRoles = new HashMap<>();
+        userRoles.put("admin", Set.of("admin", "user"));
+        userRoles.put("sensor-001", Set.of("sensor"));
+        
+        // Define role permissions
+        rolePublishPermissions = new HashMap<>();
+        rolePublishPermissions.put("admin", Set.of("#"));
+        rolePublishPermissions.put("sensor", Set.of("sensors/#"));
+        rolePublishPermissions.put("user", Set.of("public/#"));
+        
+        roleSubscribePermissions = new HashMap<>();
+        roleSubscribePermissions.put("admin", Set.of("#"));
+        roleSubscribePermissions.put("user", Set.of("public/#", "notifications/#"));
+    }
+    
+    @Override
+    public void authorizePublish(
+            @NotNull PublishAuthorizerInput input,
+            @NotNull PublishAuthorizerOutput output) {
+        
+        String clientId = input.getClientInformation().getClientId();
+        String topic = input.getPublishPacket().getTopic();
+        
+        Set<String> roles = userRoles.getOrDefault(clientId, Collections.emptySet());
+        
+        for (String role : roles) {
+            Set<String> permissions = rolePublishPermissions.getOrDefault(role, Collections.emptySet());
+            
+            for (String pattern : permissions) {
+                if (topicMatches(topic, pattern)) {
+                    output.authorizeSuccessfully();
+                    return;
+                }
+            }
+        }
+        
+        output.failAuthorization("No permission to publish to " + topic);
+    }
+    
+    @Override
+    public void authorizeSubscribe(
+            @NotNull SubscriptionAuthorizerInput input,
+            @NotNull SubscriptionAuthorizerOutput output) {
+        
+        String clientId = input.getClientInformation().getClientId();
+        String topicFilter = input.getSubscription().getTopicFilter();
+        
+        Set<String> roles = userRoles.getOrDefault(clientId, Collections.emptySet());
+        
+        for (String role : roles) {
+            Set<String> permissions = roleSubscribePermissions.getOrDefault(role, Collections.emptySet());
+            
+            for (String pattern : permissions) {
+                if (topicMatches(topicFilter, pattern)) {
+                    output.authorizeSuccessfully();
+                    return;
+                }
+            }
+        }
+        
+        output.failAuthorization("No permission to subscribe to " + topicFilter);
+    }
+    
+    private boolean topicMatches(String topic, String pattern) {
+        // Simple wildcard matching (# and +)
+        if (pattern.equals("#")) return true;
+        
+        String[] topicLevels = topic.split("/");
+        String[] patternLevels = pattern.split("/");
+        
+        for (int i = 0; i < patternLevels.length; i++) {
+            if (patternLevels[i].equals("#")) return true;
+            if (i >= topicLevels.length) return false;
+            if (!patternLevels[i].equals("+") && !patternLevels[i].equals(topicLevels[i])) {
+                return false;
+            }
+        }
+        
+        return topicLevels.length == patternLevels.length;
+    }
+}
+```
+
+## Async Authorization
+
+Perform authorization checks asynchronously:
+
+```java
+import com.hivemq.extension.sdk.api.async.Async;
+import com.hivemq.extension.sdk.api.async.TimeoutFallback;
+import java.time.Duration;
+import java.util.concurrent.CompletableFuture;
+
+public class AsyncAuthorizer implements PublishAuthorizer {
+    
+    private final AuthorizationService authService;
+    
+    @Override
+    public void authorizePublish(
+            @NotNull PublishAuthorizerInput input,
+            @NotNull PublishAuthorizerOutput output) {
+        
+        // Enable async mode
+        Async<PublishAuthorizerOutput> async = output.async(
+            Duration.ofSeconds(3),
+            TimeoutFallback.FAILURE
+        );
+        
+        String clientId = input.getClientInformation().getClientId();
+        String topic = input.getPublishPacket().getTopic();
+        
+        // Async permission check
+        authService.checkPermissionAsync(clientId, "publish", topic)
+            .thenAccept(allowed -> {
+                if (allowed) {
+                    async.resume().authorizeSuccessfully();
+                } else {
+                    async.resume().failAuthorization();
+                }
+            })
+            .exceptionally(error -> {
+                // Fail securely on errors
+                async.resume().failAuthorization("Authorization error");
+                return null;
+            });
+    }
+}
+```
+
+## Database-Backed Authorization
+
+Load permissions from a database:
+
+```java
+import java.sql.*;
+import java.util.concurrent.CompletableFuture;
+
+public class DatabaseAuthorizer implements PublishAuthorizer, SubscriptionAuthorizer {
+    
+    private final String jdbcUrl;
+    
+    public DatabaseAuthorizer(String jdbcUrl) {
+        this.jdbcUrl = jdbcUrl;
+    }
+    
+    @Override
+    public void authorizePublish(
+            @NotNull PublishAuthorizerInput input,
+            @NotNull PublishAuthorizerOutput output) {
+        
+        Async<PublishAuthorizerOutput> async = output.async(
+            Duration.ofSeconds(5),
+            TimeoutFallback.FAILURE
+        );
+        
+        String clientId = input.getClientInformation().getClientId();
+        String topic = input.getPublishPacket().getTopic();
+        
+        CompletableFuture.supplyAsync(() -> 
+            checkPublishPermission(clientId, topic)
+        ).thenAccept(allowed -> {
+            if (allowed) {
+                async.resume().authorizeSuccessfully();
+            } else {
+                async.resume().failAuthorization();
+            }
+        });
+    }
+    
+    @Override
+    public void authorizeSubscribe(
+            @NotNull SubscriptionAuthorizerInput input,
+            @NotNull SubscriptionAuthorizerOutput output) {
+        
+        Async<SubscriptionAuthorizerOutput> async = output.async(
+            Duration.ofSeconds(5),
+            TimeoutFallback.FAILURE
+        );
+        
+        String clientId = input.getClientInformation().getClientId();
+        String topicFilter = input.getSubscription().getTopicFilter();
+        
+        CompletableFuture.supplyAsync(() -> 
+            checkSubscribePermission(clientId, topicFilter)
+        ).thenAccept(allowed -> {
+            if (allowed) {
+                async.resume().authorizeSuccessfully();
+            } else {
+                async.resume().failAuthorization();
+            }
+        });
+    }
+    
+    private boolean checkPublishPermission(String clientId, String topic) {
+        String sql = "SELECT COUNT(*) FROM publish_acl WHERE client_id = ? AND topic_pattern = ?";
+        
+        try (Connection conn = DriverManager.getConnection(jdbcUrl);
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            
+            stmt.setString(1, clientId);
+            stmt.setString(2, topic);
+            
+            ResultSet rs = stmt.executeQuery();
+            return rs.next() && rs.getInt(1) > 0;
+            
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return false; // Fail securely
+        }
+    }
+    
+    private boolean checkSubscribePermission(String clientId, String topicFilter) {
+        String sql = "SELECT COUNT(*) FROM subscribe_acl WHERE client_id = ? AND topic_pattern = ?";
+        
+        try (Connection conn = DriverManager.getConnection(jdbcUrl);
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            
+            stmt.setString(1, clientId);
+            stmt.setString(2, topicFilter);
+            
+            ResultSet rs = stmt.executeQuery();
+            return rs.next() && rs.getInt(1) > 0;
+            
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return false; // Fail securely
+        }
+    }
+}
+```
+
+## Default Permissions
+
+Set default permissions for clients using Client Initializers:
+
+```java
+import com.hivemq.extension.sdk.api.services.intializer.ClientInitializer;
+import com.hivemq.extension.sdk.api.client.ClientContext;
+import com.hivemq.extension.sdk.api.client.parameter.InitializerInput;
+import com.hivemq.extension.sdk.api.packets.auth.DefaultPermissions;
+
+public class DefaultPermissionsInitializer implements ClientInitializer {
+    
+    @Override
+    public void initialize(
+            @NotNull InitializerInput input,
+            @NotNull ClientContext context) {
+        
+        String clientId = input.getClientInformation().getClientId();
+        DefaultPermissions permissions = context.getDefaultPermissions();
+        
+        // Allow publishing to own client topics
+        permissions.add(
+            DefaultPermissions.publish("clients/" + clientId + "/#")
+        );
+        
+        // Allow subscribing to own client topics
+        permissions.add(
+            DefaultPermissions.subscribe("clients/" + clientId + "/#")
+        );
+        
+        // Allow all clients to subscribe to public topics
+        permissions.add(
+            DefaultPermissions.subscribe("public/#")
+        );
+    }
+}
+```
+
+See `Authorizers.java:45` for authorizer provider registration.
+
+## Best Practices
+
+### Security
+
+1. **Fail Securely** - Deny access on errors rather than allowing
+2. **Validate Topic Patterns** - Ensure topic filters don't grant excessive access
+3. **Audit Authorization** - Log authorization decisions for security auditing
+4. **Principle of Least Privilege** - Grant minimum necessary permissions
+5. **Separate Read/Write** - Use different permissions for publish and subscribe
+
+### Performance
+
+1. **Use Async Mode** - Don't block for permission lookups
+2. **Cache Permissions** - Cache frequently checked permissions
+3. **Optimize Database Queries** - Index ACL tables properly
+4. **Minimize Latency** - Keep authorization fast to reduce message latency
+
+### Maintainability
+
+1. **Centralize Permission Logic** - Don't duplicate authorization rules
+2. **Use Configuration** - Externalize permission rules when possible
+3. **Document Permissions** - Clearly document permission model
+4. **Test Thoroughly** - Test all permission scenarios
+
+## Testing Authorization
+
+Test authorization with MQTT clients:
+
+```bash
+# Test publish authorization
+mosquitto_pub -h localhost -u sensor-001 \
+  -t sensors/temperature -m "23.5"
+
+# Test subscribe authorization
+mosquitto_sub -h localhost -u admin \
+  -t "#" -v
+
+# Expect authorization failure
+mosquitto_pub -h localhost -u sensor-001 \
+  -t admin/config -m "hack"
+```
+
+## Troubleshooting
+
+### Authorization Always Fails
+
+- Verify authorizer provider is registered
+- Check `authorizeSuccessfully()` is called for allowed operations
+- Review topic matching logic
+- Enable debug logging for authorization
+
+### Authorization Not Applied
+
+- Ensure extension is loaded and started
+- Check extension priority (lower numbers execute first)
+- Verify no other authorizers are overriding decisions
+
+### Performance Issues
+
+- Use async mode for I/O operations
+- Implement permission caching
+- Optimize database queries
+- Review authorization latency metrics
+
+See `PluginAuthorizerService.java:28` for internal authorization service interface.
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Authentication" icon="lock" href="/extensions/authentication">
+    Implement custom authentication
+  </Card>
+  <Card title="Client Initializers" icon="play" href="/extensions/client-initializers">
+    Set default permissions and initialize clients
+  </Card>
+  <Card title="Packet Interceptors" icon="filter" href="/extensions/packet-interceptors">
+    Intercept and modify MQTT packets
+  </Card>
+  <Card title="Extension SDK" icon="code" href="/extensions/extension-sdk">
+    Learn more about the Extension SDK
+  </Card>
+</CardGroup>

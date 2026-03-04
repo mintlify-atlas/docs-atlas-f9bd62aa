@@ -1,0 +1,653 @@
+---
+title: "Packet Interceptors"
+description: "Intercept and modify MQTT packets with the HiveMQ Extension SDK"
+---
+
+## Overview
+
+Packet Interceptors allow you to intercept, inspect, and modify MQTT packets as they flow through HiveMQ. Interceptors enable:
+
+- **Packet Inspection** - Examine packet contents for logging or monitoring
+- **Packet Modification** - Change packet properties, payloads, or user properties
+- **Message Enrichment** - Add metadata or transform message payloads
+- **Protocol Translation** - Convert between different data formats
+- **Filtering and Validation** - Block or modify invalid packets
+
+## Interceptor Types
+
+HiveMQ supports interceptors for all MQTT packet types:
+
+### Inbound Interceptors
+- **CONNECT** - Client connection requests
+- **PUBLISH** - Inbound messages from clients
+- **SUBSCRIBE** - Subscription requests
+- **UNSUBSCRIBE** - Unsubscription requests
+- **DISCONNECT** - Client disconnection
+- **PINGREQ** - Ping requests
+- **AUTH** - Authentication packets (MQTT 5.0)
+
+### Outbound Interceptors
+- **CONNACK** - Connection acknowledgments
+- **PUBLISH** - Outbound messages to clients
+- **SUBACK** - Subscribe acknowledgments
+- **UNSUBACK** - Unsubscribe acknowledgments
+- **DISCONNECT** - Server-initiated disconnects
+- **PINGRESP** - Ping responses
+- **PUBACK, PUBREC, PUBREL, PUBCOMP** - QoS acknowledgments
+
+See `Interceptors.java:27` for interceptor service interface.
+
+## Implementing Interceptors
+
+### Step 1: Register Interceptor Provider
+
+```java
+import com.hivemq.extension.sdk.api.ExtensionMain;
+import com.hivemq.extension.sdk.api.annotations.NotNull;
+import com.hivemq.extension.sdk.api.parameter.*;
+import com.hivemq.extension.sdk.api.services.Services;
+import com.hivemq.extension.sdk.api.interceptor.publish.PublishInboundInterceptor;
+
+public class MyInterceptorExtension implements ExtensionMain {
+    
+    @Override
+    public void extensionStart(
+            @NotNull ExtensionStartInput input,
+            @NotNull ExtensionStartOutput output) {
+        
+        Services services = input.getServices();
+        
+        // Register global publish inbound interceptor
+        services.interceptorRegistry().setPublishInboundInterceptorProvider(
+            interceptorInput -> new MyPublishInterceptor()
+        );
+        
+        // Register global connect interceptor
+        services.interceptorRegistry().setConnectInboundInterceptorProvider(
+            interceptorInput -> new MyConnectInterceptor()
+        );
+    }
+    
+    @Override
+    public void extensionStop(
+            @NotNull ExtensionStopInput input,
+            @NotNull ExtensionStopOutput output) {
+        // Cleanup
+    }
+}
+```
+
+### Step 2: Implement Publish Inbound Interceptor
+
+```java
+import com.hivemq.extension.sdk.api.interceptor.publish.PublishInboundInterceptor;
+import com.hivemq.extension.sdk.api.interceptor.publish.parameter.PublishInboundInput;
+import com.hivemq.extension.sdk.api.interceptor.publish.parameter.PublishInboundOutput;
+import com.hivemq.extension.sdk.api.annotations.NotNull;
+import com.hivemq.extension.sdk.api.packets.publish.ModifiablePublishPacket;
+import com.hivemq.extension.sdk.api.packets.publish.PublishPacket;
+
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
+
+public class MyPublishInterceptor implements PublishInboundInterceptor {
+    
+    @Override
+    public void onInboundPublish(
+            @NotNull PublishInboundInput input,
+            @NotNull PublishInboundOutput output) {
+        
+        PublishPacket packet = input.getPublishPacket();
+        String clientId = input.getClientInformation().getClientId();
+        
+        System.out.println("Client " + clientId + " published to " + packet.getTopic());
+        
+        // Get modifiable packet
+        ModifiablePublishPacket modifiable = output.getPublishPacket();
+        
+        // Add user property with client ID
+        modifiable.getUserProperties().addUserProperty("client-id", clientId);
+        
+        // Add timestamp
+        modifiable.getUserProperties().addUserProperty(
+            "timestamp",
+            String.valueOf(System.currentTimeMillis())
+        );
+    }
+}
+```
+
+See interceptor implementations in `src/main/java/com/hivemq/extensions/interceptor/publish/`.
+
+## Publish Interceptors
+
+### Inbound Publish Interceptor
+
+Intercept messages from clients before routing:
+
+```java
+import com.hivemq.extension.sdk.api.packets.publish.PayloadFormatIndicator;
+import com.hivemq.extension.sdk.api.packets.general.Qos;
+
+public class PublishInboundInterceptor implements PublishInboundInterceptor {
+    
+    @Override
+    public void onInboundPublish(
+            @NotNull PublishInboundInput input,
+            @NotNull PublishInboundOutput output) {
+        
+        PublishPacket packet = input.getPublishPacket();
+        ModifiablePublishPacket modifiable = output.getPublishPacket();
+        
+        // Read packet properties
+        String topic = packet.getTopic();
+        Qos qos = packet.getQos();
+        boolean retain = packet.getRetain();
+        ByteBuffer payload = packet.getPayload().orElse(null);
+        
+        // Modify topic
+        if (topic.startsWith("v1/")) {
+            modifiable.setTopic("legacy/" + topic);
+        }
+        
+        // Transform payload
+        if (payload != null) {
+            String payloadStr = StandardCharsets.UTF_8.decode(payload).toString();
+            String transformed = payloadStr.toUpperCase();
+            modifiable.setPayload(
+                ByteBuffer.wrap(transformed.getBytes(StandardCharsets.UTF_8))
+            );
+        }
+        
+        // Set payload format indicator
+        modifiable.setPayloadFormatIndicator(
+            PayloadFormatIndicator.UTF_8
+        );
+        
+        // Modify QoS
+        if (qos == Qos.AT_MOST_ONCE) {
+            modifiable.setQos(Qos.AT_LEAST_ONCE); // Upgrade QoS
+        }
+    }
+}
+```
+
+### Outbound Publish Interceptor
+
+Intercept messages before delivery to clients:
+
+```java
+import com.hivemq.extension.sdk.api.interceptor.publish.PublishOutboundInterceptor;
+import com.hivemq.extension.sdk.api.interceptor.publish.parameter.PublishOutboundInput;
+import com.hivemq.extension.sdk.api.interceptor.publish.parameter.PublishOutboundOutput;
+
+public class PublishOutboundInterceptor implements PublishOutboundInterceptor {
+    
+    @Override
+    public void onOutboundPublish(
+            @NotNull PublishOutboundInput input,
+            @NotNull PublishOutboundOutput output) {
+        
+        String clientId = input.getClientInformation().getClientId();
+        ModifiablePublishPacket packet = output.getPublishPacket();
+        
+        // Filter sensitive data for non-admin clients
+        if (!clientId.startsWith("admin-")) {
+            ByteBuffer payload = packet.getPayload().orElse(null);
+            if (payload != null) {
+                String data = StandardCharsets.UTF_8.decode(payload).toString();
+                String filtered = data.replaceAll("password=\\w+", "password=***");
+                packet.setPayload(
+                    ByteBuffer.wrap(filtered.getBytes(StandardCharsets.UTF_8))
+                );
+            }
+        }
+        
+        // Add delivery metadata
+        packet.getUserProperties().addUserProperty(
+            "delivered-to",
+            clientId
+        );
+    }
+}
+```
+
+## Connect Interceptors
+
+### Inbound Connect Interceptor
+
+Intercept client connection requests:
+
+```java
+import com.hivemq.extension.sdk.api.interceptor.connect.ConnectInboundInterceptor;
+import com.hivemq.extension.sdk.api.interceptor.connect.parameter.ConnectInboundInput;
+import com.hivemq.extension.sdk.api.interceptor.connect.parameter.ConnectInboundOutput;
+import com.hivemq.extension.sdk.api.packets.connect.ModifiableConnectPacket;
+
+public class ConnectInboundInterceptor implements ConnectInboundInterceptor {
+    
+    @Override
+    public void onInboundConnect(
+            @NotNull ConnectInboundInput input,
+            @NotNull ConnectInboundOutput output) {
+        
+        ModifiableConnectPacket connect = output.getConnectPacket();
+        
+        // Enforce minimum keep alive
+        if (connect.getKeepAlive() < 30) {
+            connect.setKeepAlive(30);
+        }
+        
+        // Force clean start for certain clients
+        String clientId = connect.getClientId();
+        if (clientId.startsWith("temp-")) {
+            connect.setCleanStart(true);
+        }
+        
+        // Modify session expiry interval (MQTT 5.0)
+        connect.setSessionExpiryInterval(3600); // 1 hour
+    }
+}
+```
+
+See `ConnectInboundInterceptorHandler.java` for internal implementation.
+
+### Outbound Connack Interceptor
+
+Intercept connection acknowledgments:
+
+```java
+import com.hivemq.extension.sdk.api.interceptor.connack.ConnackOutboundInterceptor;
+import com.hivemq.extension.sdk.api.interceptor.connack.parameter.ConnackOutboundInput;
+import com.hivemq.extension.sdk.api.interceptor.connack.parameter.ConnackOutboundOutput;
+import com.hivemq.extension.sdk.api.packets.connack.ModifiableConnackPacket;
+
+public class ConnackOutboundInterceptor implements ConnackOutboundInterceptor {
+    
+    @Override
+    public void onOutboundConnack(
+            @NotNull ConnackOutboundInput input,
+            @NotNull ConnackOutboundOutput output) {
+        
+        ModifiableConnackPacket connack = output.getConnackPacket();
+        String clientId = input.getClientInformation().getClientId();
+        
+        // Add server information
+        connack.getUserProperties().addUserProperty(
+            "server-version",
+            "1.0.0"
+        );
+        
+        // Add client-specific metadata
+        connack.getUserProperties().addUserProperty(
+            "assigned-client-id",
+            clientId
+        );
+    }
+}
+```
+
+See `ConnackOutboundInterceptorHandler.java` for internal implementation.
+
+## Subscribe Interceptors
+
+### Inbound Subscribe Interceptor
+
+Intercept subscription requests:
+
+```java
+import com.hivemq.extension.sdk.api.interceptor.subscribe.SubscribeInboundInterceptor;
+import com.hivemq.extension.sdk.api.interceptor.subscribe.parameter.SubscribeInboundInput;
+import com.hivemq.extension.sdk.api.interceptor.subscribe.parameter.SubscribeInboundOutput;
+import com.hivemq.extension.sdk.api.packets.subscribe.ModifiableSubscribePacket;
+import com.hivemq.extension.sdk.api.packets.subscribe.ModifiableSubscription;
+
+public class SubscribeInboundInterceptor implements SubscribeInboundInterceptor {
+    
+    @Override
+    public void onInboundSubscribe(
+            @NotNull SubscribeInboundInput input,
+            @NotNull SubscribeInboundOutput output) {
+        
+        ModifiableSubscribePacket subscribe = output.getSubscribePacket();
+        String clientId = input.getClientInformation().getClientId();
+        
+        // Modify subscriptions
+        for (ModifiableSubscription subscription : subscribe.getSubscriptions()) {
+            String topicFilter = subscription.getTopicFilter();
+            
+            // Downgrade QoS for non-premium clients
+            if (!clientId.startsWith("premium-")) {
+                subscription.setQos(Qos.AT_MOST_ONCE);
+            }
+            
+            // Modify topic filters
+            if (topicFilter.equals("#")) {
+                // Prevent wildcard subscriptions
+                subscription.setTopicFilter("public/#");
+            }
+            
+            System.out.println("Client " + clientId + " subscribing to " + 
+                subscription.getTopicFilter());
+        }
+    }
+}
+```
+
+See interceptor implementations in `src/main/java/com/hivemq/extensions/interceptor/subscribe/`.
+
+## Disconnect Interceptors
+
+### Inbound Disconnect Interceptor
+
+Intercept client-initiated disconnects:
+
+```java
+import com.hivemq.extension.sdk.api.interceptor.disconnect.DisconnectInboundInterceptor;
+import com.hivemq.extension.sdk.api.interceptor.disconnect.parameter.DisconnectInboundInput;
+import com.hivemq.extension.sdk.api.interceptor.disconnect.parameter.DisconnectInboundOutput;
+
+public class DisconnectInboundInterceptor implements DisconnectInboundInterceptor {
+    
+    @Override
+    public void onInboundDisconnect(
+            @NotNull DisconnectInboundInput input,
+            @NotNull DisconnectInboundOutput output) {
+        
+        String clientId = input.getClientInformation().getClientId();
+        var disconnect = input.getDisconnectPacket();
+        
+        System.out.println("Client " + clientId + " disconnecting. Reason: " + 
+            disconnect.getReasonCode());
+        
+        // Log session expiry
+        disconnect.getSessionExpiryInterval().ifPresent(expiry -> {
+            System.out.println("Session expiry interval: " + expiry + " seconds");
+        });
+    }
+}
+```
+
+See `DisconnectInterceptorHandler.java` for internal implementation.
+
+### Outbound Disconnect Interceptor
+
+Intercept server-initiated disconnects:
+
+```java
+import com.hivemq.extension.sdk.api.interceptor.disconnect.DisconnectOutboundInterceptor;
+import com.hivemq.extension.sdk.api.interceptor.disconnect.parameter.DisconnectOutboundInput;
+import com.hivemq.extension.sdk.api.interceptor.disconnect.parameter.DisconnectOutboundOutput;
+import com.hivemq.extension.sdk.api.packets.disconnect.ModifiableDisconnectPacket;
+
+public class DisconnectOutboundInterceptor implements DisconnectOutboundInterceptor {
+    
+    @Override
+    public void onOutboundDisconnect(
+            @NotNull DisconnectOutboundInput input,
+            @NotNull DisconnectOutboundOutput output) {
+        
+        ModifiableDisconnectPacket disconnect = output.getDisconnectPacket();
+        String clientId = input.getClientInformation().getClientId();
+        
+        // Add reason string for MQTT 5.0 clients
+        disconnect.setReasonString(
+            "Disconnected by server policy"
+        );
+        
+        // Add custom metadata
+        disconnect.getUserProperties().addUserProperty(
+            "disconnected-client",
+            clientId
+        );
+        
+        System.out.println("Disconnecting client: " + clientId);
+    }
+}
+```
+
+## Message Enrichment Example
+
+Add metadata to all published messages:
+
+```java
+import java.time.Instant;
+import java.util.UUID;
+
+public class MessageEnrichmentInterceptor implements PublishInboundInterceptor {
+    
+    @Override
+    public void onInboundPublish(
+            @NotNull PublishInboundInput input,
+            @NotNull PublishInboundOutput output) {
+        
+        ModifiablePublishPacket packet = output.getPublishPacket();
+        var userProps = packet.getUserProperties();
+        
+        // Add message ID
+        userProps.addUserProperty(
+            "message-id",
+            UUID.randomUUID().toString()
+        );
+        
+        // Add timestamp
+        userProps.addUserProperty(
+            "timestamp",
+            Instant.now().toString()
+        );
+        
+        // Add client information
+        String clientId = input.getClientInformation().getClientId();
+        userProps.addUserProperty("publisher", clientId);
+        
+        // Add connection metadata
+        input.getConnectionInformation().getInetAddress().ifPresent(addr -> {
+            userProps.addUserProperty(
+                "source-ip",
+                addr.getHostAddress()
+            );
+        });
+    }
+}
+```
+
+## Protocol Translation Example
+
+Convert between JSON and Protocol Buffers:
+
+```java
+import com.google.protobuf.Message;
+import com.google.gson.Gson;
+
+public class ProtocolTranslationInterceptor implements PublishInboundInterceptor {
+    
+    private final Gson gson = new Gson();
+    
+    @Override
+    public void onInboundPublish(
+            @NotNull PublishInboundInput input,
+            @NotNull PublishInboundOutput output) {
+        
+        PublishPacket packet = input.getPublishPacket();
+        String topic = packet.getTopic();
+        
+        // Convert JSON to Protobuf for legacy topics
+        if (topic.startsWith("legacy/json/")) {
+            ByteBuffer payload = packet.getPayload().orElse(null);
+            if (payload != null) {
+                String json = StandardCharsets.UTF_8.decode(payload).toString();
+                
+                // Convert JSON to Protobuf
+                byte[] protobuf = jsonToProtobuf(json);
+                
+                ModifiablePublishPacket modifiable = output.getPublishPacket();
+                modifiable.setPayload(ByteBuffer.wrap(protobuf));
+                modifiable.setTopic(topic.replace("legacy/json/", "protobuf/"));
+                modifiable.setContentType("application/protobuf");
+            }
+        }
+    }
+    
+    private byte[] jsonToProtobuf(String json) {
+        // Convert JSON to Protocol Buffers
+        // Implementation depends on your protobuf schema
+        return new byte[0];
+    }
+}
+```
+
+## Async Interceptors
+
+Perform async operations in interceptors:
+
+```java
+import com.hivemq.extension.sdk.api.async.Async;
+import com.hivemq.extension.sdk.api.async.TimeoutFallback;
+import java.time.Duration;
+
+public class AsyncPublishInterceptor implements PublishInboundInterceptor {
+    
+    private final ValidationService validationService;
+    
+    @Override
+    public void onInboundPublish(
+            @NotNull PublishInboundInput input,
+            @NotNull PublishInboundOutput output) {
+        
+        // Enable async mode
+        Async<PublishInboundOutput> async = output.async(
+            Duration.ofSeconds(2),
+            TimeoutFallback.SUCCESS // Allow publish on timeout
+        );
+        
+        PublishPacket packet = input.getPublishPacket();
+        ByteBuffer payload = packet.getPayload().orElse(null);
+        
+        if (payload != null) {
+            // Async validation
+            validationService.validateAsync(payload)
+                .thenAccept(valid -> {
+                    if (valid) {
+                        async.resume(); // Continue with packet
+                    } else {
+                        // Prevent delivery
+                        async.resume().preventPublishDelivery();
+                    }
+                });
+        } else {
+            async.resume();
+        }
+    }
+}
+```
+
+## Preventing Packet Delivery
+
+Block packets from being processed:
+
+```java
+public class FilteringInterceptor implements PublishInboundInterceptor {
+    
+    @Override
+    public void onInboundPublish(
+            @NotNull PublishInboundInput input,
+            @NotNull PublishInboundOutput output) {
+        
+        PublishPacket packet = input.getPublishPacket();
+        
+        // Block messages with offensive content
+        ByteBuffer payload = packet.getPayload().orElse(null);
+        if (payload != null) {
+            String content = StandardCharsets.UTF_8.decode(payload).toString();
+            
+            if (containsOffensiveContent(content)) {
+                // Prevent message delivery
+                output.preventPublishDelivery();
+                return;
+            }
+        }
+        
+        // Block based on rate limiting
+        String clientId = input.getClientInformation().getClientId();
+        if (isRateLimited(clientId)) {
+            output.preventPublishDelivery();
+        }
+    }
+    
+    private boolean containsOffensiveContent(String content) {
+        // Content filtering logic
+        return false;
+    }
+    
+    private boolean isRateLimited(String clientId) {
+        // Rate limiting logic
+        return false;
+    }
+}
+```
+
+## Best Practices
+
+### Performance
+
+1. **Minimize Processing** - Keep interceptor logic fast and lightweight
+2. **Use Async Mode** - Don't block packet processing with I/O
+3. **Avoid Unnecessary Modifications** - Only modify packets when needed
+4. **Cache Lookups** - Cache frequently accessed data
+5. **Batch Operations** - Process multiple packets together when possible
+
+### Security
+
+1. **Validate Payloads** - Check payload size and format
+2. **Sanitize Topics** - Validate topic structure and content
+3. **Filter Sensitive Data** - Remove credentials from logs and metrics
+4. **Implement Rate Limiting** - Prevent abuse via interceptors
+
+### Reliability
+
+1. **Handle Errors Gracefully** - Don't crash on malformed packets
+2. **Set Appropriate Timeouts** - Don't block indefinitely
+3. **Log Important Events** - Track interceptor actions for debugging
+4. **Test Edge Cases** - Test with malformed and edge-case packets
+
+## Troubleshooting
+
+### Interceptor Not Called
+
+- Verify interceptor provider is registered in `extensionStart()`
+- Check extension is loaded and started
+- Review packet type (inbound vs outbound)
+- Enable debug logging for interceptor system
+
+### Packet Modifications Not Applied
+
+- Use `output.getPublishPacket()` to get modifiable packet
+- Verify modifications occur before async timeout
+- Check that packet hasn't been prevented from delivery
+- Review interceptor execution order (extension priority)
+
+### Performance Degradation
+
+- Profile interceptor execution time
+- Use async mode for I/O operations
+- Reduce number of registered interceptors
+- Optimize packet modification logic
+
+See `Interceptors.java:35` and `Interceptors.java:51` for interceptor provider registration.
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Authentication" icon="lock" href="/extensions/authentication">
+    Authenticate clients before packet processing
+  </Card>
+  <Card title="Authorization" icon="shield" href="/extensions/authorization">
+    Control packet authorization
+  </Card>
+  <Card title="Client Initializers" icon="play" href="/extensions/client-initializers">
+    Register client-specific interceptors
+  </Card>
+  <Card title="Extension SDK" icon="code" href="/extensions/extension-sdk">
+    Learn more about the Extension SDK
+  </Card>
+</CardGroup>
