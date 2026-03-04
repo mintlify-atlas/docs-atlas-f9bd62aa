@@ -1,0 +1,149 @@
+{
+  "projectType": "infrastructure",
+  "projectName": "HiveMQ Community Edition",
+  "projectDescription": "Java-based open source MQTT broker with full support for MQTT 3.x and MQTT 5",
+  "theme": "aspen",
+  "primaryColor": "#e1b926",
+  "lightColor": "#6c530b",
+  "darkColor": "#1d190e",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "installation"
+            ]
+          },
+          {
+            "group": "Deployment",
+            "pages": [
+              "deployment/binary",
+              "deployment/docker",
+              "deployment/building-from-source"
+            ]
+          },
+          {
+            "group": "Configuration",
+            "pages": [
+              "configuration/overview",
+              "configuration/listeners",
+              "configuration/mqtt-settings",
+              "configuration/security",
+              "configuration/persistence",
+              "configuration/restrictions"
+            ]
+          },
+          {
+            "group": "Extensions",
+            "pages": [
+              "extensions/overview",
+              "extensions/extension-sdk",
+              "extensions/authentication",
+              "extensions/authorization",
+              "extensions/client-initializers",
+              "extensions/packet-interceptors"
+            ]
+          },
+          {
+            "group": "Operations",
+            "pages": [
+              "operations/monitoring",
+              "operations/metrics",
+              "operations/logging",
+              "operations/diagnostics"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Embedded Mode",
+        "groups": [
+          {
+            "group": "Getting Started",
+            "pages": [
+              "embedded/overview",
+              "embedded/installation",
+              "embedded/quickstart"
+            ]
+          },
+          {
+            "group": "API Reference",
+            "pages": [
+              "embedded/api/embedded-hivemq",
+              "embedded/api/embedded-hivemq-builder",
+              "embedded/api/embedded-extension",
+              "embedded/api/embedded-extension-builder"
+            ]
+          },
+          {
+            "group": "Advanced",
+            "pages": [
+              "embedded/advanced/configuration",
+              "embedded/advanced/persistence",
+              "embedded/advanced/dependency-exclusions"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "MQTT",
+        "groups": [
+          {
+            "group": "MQTT Protocol",
+            "pages": [
+              "mqtt/overview",
+              "mqtt/mqtt3",
+              "mqtt/mqtt5",
+              "mqtt/features"
+            ]
+          },
+          {
+            "group": "Transport Protocols",
+            "pages": [
+              "mqtt/transports/tcp",
+              "mqtt/transports/tls",
+              "mqtt/transports/websocket",
+              "mqtt/transports/secure-websocket"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "mqtt/guides/connecting-clients",
+              "mqtt/guides/publishing-subscribing",
+              "mqtt/guides/quality-of-service",
+              "mqtt/guides/retained-messages"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Full MQTT 3.1, 3.1.1, and MQTT 5.0 support",
+    "Multiple transport protocols (TCP, TLS, WebSocket)",
+    "Java Extension SDK for authentication and authorization",
+    "Embedded mode for Java applications",
+    "Docker support with pre-built images",
+    "Metrics and monitoring via JMX",
+    "High-performance MQTT broker",
+    "Configurable persistence with RocksDB or file-based storage"
+  ],
+  "publicApiSurface": [
+    "com.hivemq.embedded.EmbeddedHiveMQ",
+    "com.hivemq.embedded.EmbeddedHiveMQBuilder",
+    "com.hivemq.embedded.EmbeddedExtension",
+    "com.hivemq.embedded.EmbeddedExtensionBuilder",
+    "HiveMQServer (Main class)",
+    "Extension SDK API interfaces",
+    "Configuration XML Schema",
+    "MQTT 3.1/3.1.1/5.0 endpoints on port 1883",
+    "WebSocket endpoints on port 8000",
+    "JMX metrics endpoints"
+  ]
+}
